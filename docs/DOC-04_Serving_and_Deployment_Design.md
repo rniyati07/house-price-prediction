@@ -2,10 +2,10 @@
 
 **Project:** House Price Prediction — End-to-End ML Regression System
 **Document ID:** DOC-04
-**Version:** 1.0
-**Status:** Approved baseline
+**Version:** 1.1
+**Status:** Approved baseline — revision 1.1 (dataset alignment: the project uses the full 2,930-row Ames file; see `docs/data_card.md`)
 **Date:** 2026-09-28
-**Authoritative sources, in precedence order:** `house-price-prediction-adr.md` (ADR-000, ADR-01 to ADR-20) → DOC-01 v1.1 → DOC-02 v1.1 → DOC-03 v1.0
+**Authoritative sources, in precedence order:** `house-price-prediction-adr.md` (ADR-000, ADR-01 to ADR-20) → DOC-01 v1.2 → DOC-02 v1.2 → DOC-03 v1.1
 **Related documents:** DOC-03 ML System Design
 
 ---
@@ -21,7 +21,7 @@ It uses the same conventions as DOC-03. Components cite `[ADR-xx]`, `FR-xxx`, `N
 | SD | Topic | What DOC-04 fixes | Section |
 |---|---|---|---|
 | SD-01 | Request fields | The request carries the 77-column model input schema (DN-11). Every field must be present; nullable fields must be sent as explicit `null` | 6.4, 7.2 |
-| SD-02 | Field names | JSON keys are the original dataset column names (for example `1stFlrSF`), mapped to valid Python names through aliases | 7.2 |
+| SD-02 | Field names | JSON keys are the canonical column names defined in `schema.yaml` (`name`, for example `1stFlrSF`), not the raw file headers (`1st Flr SF`); they are mapped to valid Python names through aliases | 7.2 |
 | SD-03 | Numeric strictness | Numeric fields reject strings and booleans; integer fields accept JSON integers only | 7.3 |
 | SD-04 | Batch body and response shapes | `{"properties": [...]}` in, `{"count": n, "predictions": [...]}` out, in input order | 6.5 |
 | SD-05 | Error bodies and request IDs | FastAPI's standard 422 body; a generic 500 body; an `X-Request-ID` header on every response | 6.6 |
@@ -31,7 +31,7 @@ It uses the same conventions as DOC-03. Components cite `[ADR-xx]`, `FR-xxx`, `N
 | SD-09 | Worker model | One Uvicorn worker process per container | 11.5 |
 | SD-10 | Logging implementation | Standard-library `logging` with a JSON formatter; named events | 13 |
 | SD-11 | CI image | CI builds and tests the image with the smoke artifact (DN-17); only frozen artifacts are released | 16.5, 17 |
-| SD-12 | Batch CLI columns | `Id` passes through; `SaleType`, `SaleCondition`, `SalePrice` are ignored; any other extra column is rejected | 10.2 |
+| SD-12 | Batch CLI columns | Headers are normalized to canonical names as in ingestion (raw dataset layout accepted); `Id` and `PID` pass through; `SaleType`, `SaleCondition`, `SalePrice` are ignored; any other extra column is rejected | 10.2 |
 | SD-13 | Startup verification | Model hash, schema hash, library versions, and a warm-up prediction must all pass before the service accepts traffic | 5 |
 | SD-14 | LightGBM runtime library | The runtime image installs the OpenMP runtime (`libgomp1`) that LightGBM requires | 11.3 |
 | SD-15 | Example payload | `configs/api_example.json` holds one development-set row's 77 inputs; used for OpenAPI docs, warm-up, and tests | 6.4, 5.2 |
@@ -217,7 +217,7 @@ On SIGTERM, Uvicorn stops accepting connections and finishes in-flight requests;
 | Convention | Rule |
 |---|---|
 | Media type | `application/json` for requests and responses |
-| Field names | Original dataset column names (SD-02) |
+| Field names | Canonical column names from `schema.yaml` (SD-02) |
 | Money | `predicted_price` is a JSON number in US dollars, not rounded |
 | Request ID | Every response carries `X-Request-ID` (a new UUID4 per request) (SD-05) |
 | Extra fields | Rejected with 422 (`extra="forbid"`) |
@@ -254,9 +254,9 @@ On SIGTERM, Uvicorn stops accepting connections and finishes in-flight requests;
 
 | Aspect | Rule |
 |---|---|
-| Fields | The 77 model-input columns (the 79 features minus `SaleType`, `SaleCondition`); `Id` and `SalePrice` are not accepted |
+| Fields | The 77 model-input columns (the 79 features minus `SaleType`, `SaleCondition`); the identifiers `Id` and `PID` and the target `SalePrice` are not accepted |
 | Presence | Every field must be present |
-| Nullable fields | The 19 columns documented as containing `NA` in the dataset (the absent-feature columns plus `LotFrontage`, `Electrical`, `MasVnrType`, `MasVnrArea`, `GarageYrBlt`) accept `null`; all others reject it (FR-044) |
+| Nullable fields | The 27 columns marked `nullable: true` in `schema.yaml`, i.e. those containing missing values in the dataset: the absent-feature categoricals (`PoolQC`, `MiscFeature`, `Alley`, `Fence`, `FireplaceQu`, the four `Garage*` and five `Bsmt*` categoricals, `MasVnrType`), their related numerics (`MasVnrArea`, `GarageCars`, `GarageArea`, `BsmtFinSF1`, `BsmtFinSF2`, `BsmtUnfSF`, `TotalBsmtSF`, `BsmtFullBath`, `BsmtHalfBath`), plus `LotFrontage`, `GarageYrBlt`, and `Electrical`, accept `null`; all others reject it (FR-044) |
 | Types, allowed values, ranges | From `schema.yaml` (Section 7) |
 
 **Why every field must be present, even the nullable ones (SD-01).** In this dataset, `null` carries meaning: `PoolQC: null` means "no pool" (DOC-02 §6.2). If fields could be omitted, a client that forgot `PoolQC` would silently be told "no pool". Requiring an explicit `null` makes the client state absence deliberately, and catches typos and forgotten fields as 422 errors.
@@ -323,7 +323,7 @@ The standard 422 body is kept because it is what FastAPI clients and the OpenAPI
 
 | Aspect | Implementation |
 |---|---|
-| Field names (SD-02) | Internal names are sanitized Python identifiers (for example `f_1stFlrSF`); each has an alias equal to the dataset column name. Requests and responses use the alias |
+| Field names (SD-02) | Internal names are sanitized Python identifiers (for example `f_1stFlrSF`); each has an alias equal to the canonical column name in `schema.yaml`. Requests and responses use the alias. Raw file headers (`source_name`, for example `1st Flr SF`) are not accepted by the API |
 | Presence (SD-01) | Every field is declared required; nullable fields are typed `T | None` but still required |
 | Extra fields | `model_config = ConfigDict(extra="forbid")` |
 | Order | Irrelevant in JSON; the frame builder orders columns by the schema (DOC-03 §7.7) |
@@ -482,8 +482,8 @@ make predict INPUT=path/to/properties.csv OUTPUT=path/to/predictions.csv
 | # | Step | Detail |
 |---|---|---|
 | 1 | Load artifact | Same verification as service startup steps 3–10 (release check, hash, versions, schema hash) using `--model-dir` (default: the directory named by `HPP_MODEL_DIR`) |
-| 2 | Parse CSV | Same parsing as ingestion: default missing-token lists disabled; only `NA` and the empty string are missing (DN-18) |
-| 3 | Column check | Apply SD-12 (Section 10.2) |
+| 2 | Parse CSV | Same parsing as ingestion: default missing-token lists disabled; only `NA` and the empty string are missing (DN-18); every column read as text, then cast per `schema.yaml` |
+| 3 | Normalize headers and check columns | Rename headers with the same `schema.yaml` mapping the ingestion layer uses (`source_name` → `name`, DOC-03 §5.2), then apply SD-12 (Section 10.2) |
 | 4 | Validate | Pandera **inference schema** (the model-input subset of `schema.yaml`), lazy mode, collecting all failures |
 | 5 | On any failure | Write no output file; print a failure report (row number, column, check, offending value); exit code 2 (AC-062) |
 | 6 | Predict | One `model.predict` call on the 77-column frame in schema order |
@@ -498,20 +498,21 @@ make predict INPUT=path/to/properties.csv OUTPUT=path/to/predictions.csv
 | Column | Rule |
 |---|---|
 | The 77 model-input columns | Required, any order (reordered to schema order internally) |
-| `Id` | Optional; if present, copied to the output unchanged and not used for prediction |
-| `SaleType`, `SaleCondition`, `SalePrice` | Optional; ignored, with a `batch.columns_ignored` log line. This lets files in the original dataset layout be scored without editing |
+| `Id`, `PID` | Optional identifiers; if present, copied to the output unchanged and never used for prediction |
+| `SaleType`, `SaleCondition`, `SalePrice` | Optional; ignored, with a `batch.columns_ignored` log line |
 | Any other column | Rejected (exit code 2), so that typos in column names are caught |
 
-Encoding: UTF-8, comma-separated, header row required.
+**Header normalization.** Before the rules above are applied, headers are renamed with the `schema.yaml` mapping used by ingestion (`source_name` → `name`; for example `Gr Liv Area` → `GrLivArea`, `Order` → `Id`). A file may therefore use either the raw dataset headers or the canonical names, so files in the raw dataset layout (including `data/raw/train.csv` itself) can be scored without manual renaming. Only names change; values are not modified. After normalization, a column that is still unknown, or a column that appears twice (for example both `GrLivArea` and `Gr Liv Area`), is rejected (exit code 2).
 
-**Known limitation.** Kaggle's `test.csv` is documented to contain missing values in some columns that are never missing in `train.csv`. Under the contract, those rows fail validation. Scoring `test.csv` is an optional sanity check outside the release scope [ADR-01], and the contract is not relaxed for it.
+Encoding: UTF-8, comma-separated, header row required.
 
 ## 10.3 Output Format
 
 | Column | Content |
 |---|---|
 | `row_index` | 0-based position in the input file |
-| `Id` | Present only if the input had `Id` |
+| `Id` | Present only if the input had `Id` (or the raw header `Order`) |
+| `PID` | Present only if the input had `PID` |
 | `predicted_price` | Dollars, full floating-point precision (written with round-trip-safe formatting so that values equal API responses exactly, AC-063) |
 | `out_of_domain` | `true` / `false` |
 | `model_version` | From metadata |
@@ -834,7 +835,7 @@ All tests run under pytest in CI [ADR-18]. Serving tests use FastAPI's `TestClie
 | `test_training_serving_consistency` | API price equals direct `predict` for every fixture row (Section 9.2) | AC-057 |
 | `test_cli_equals_api` | CLI output equals API output for the same rows | AC-063 |
 | `test_cli_rejects_invalid_file` | Exit code 2, no output file, every invalid row reported | AC-062 |
-| `test_cli_column_rules` | `Id` passes through; ignored columns logged; unknown column rejected | AC-062 |
+| `test_cli_column_rules` | Raw dataset headers normalized to canonical names; `Id` and `PID` pass through; ignored columns logged; unknown or duplicated column rejected | AC-062 |
 
 ## 16.4 Serving and Startup Tests
 

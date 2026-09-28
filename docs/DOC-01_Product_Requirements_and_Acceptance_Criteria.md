@@ -2,9 +2,9 @@
 
 **Project:** House Price Prediction — End-to-End ML Regression System
 **Document ID:** DOC-01
-**Version:** 1.1
-**Status:** Approved baseline — revision 1.1
-**Date:** 2026-09-27
+**Version:** 1.2
+**Status:** Approved baseline — revision 1.2 (dataset alignment: the project uses the full 2,930-row Ames file; see `docs/data_card.md`)
+**Date:** 2026-09-28
 **Authoritative source:** `house-price-prediction-adr.md` (ADR-000: Foundational Decisions, ADR-01 to ADR-20)
 **Related documents:** DOC-02 Data Understanding and EDA
 
@@ -20,7 +20,7 @@ In a few places the ADR states an intent in qualitative terms (for example, "bea
 
 **Two kinds of criteria.** Every requirement and acceptance criterion in this document is one of:
 
-- **ADR-direct:** the threshold, count, tool, or procedure is stated in the ADR itself (for example: 1,456 in-scope rows, the 80/20 split, 5×3 repeated CV, the tuning budgets, holdout log-RMSE ≤ 0.13, MAPE ≤ 10%, 80% coverage, batch limit of 100, Python 3.12 slim, non-root container). These carry no label.
+- **ADR-direct:** the threshold, count, tool, or procedure is stated in the ADR itself (for example: the scope rule, the 80/20 split, 5×3 repeated CV, the tuning budgets, holdout log-RMSE ≤ 0.13, MAPE ≤ 10%, 80% coverage, batch limit of 100, Python 3.12 slim, non-root container). These carry no label.
 - **Interpretation:** DOC-01 adds precision the ADR does not literally specify (a numeric tolerance, a boundary case, a verification procedure, or an operational definition of a qualitative phrase). These carry an **IN-xx** tag where they appear, and are indexed below.
 
 **Interpretation note index.**
@@ -29,10 +29,10 @@ In a few places the ADR states an intent in qualitative terms (for example, "bea
 |---|---|---|---|
 | IN-01 | FR-003, AC-003 | Data is a contract [ADR-04]; NA means "absent" per the data dictionary [ADR-05] | Explicit, documented missing-token parsing so counts do not depend on library defaults |
 | IN-02 | FR-009, AC-011 | Holdout is locked and evaluated once [ADR-09] | EDA analyses relating features to `SalePrice` use the development set only |
-| IN-03 | FR-014, AC-018 | Transaction-outcome columns excluded [ADR-02] | `Id` also excluded as a record identifier (the ADR does not name it) |
+| IN-03 | FR-014, AC-018 | Transaction-outcome columns excluded [ADR-02] | `Id` and `PID` also excluded as record identifiers (the ADR does not name them) |
 | IN-04 | FR-015, AC-019 | Feature kept "only if a CV ablation shows it doesn't hurt" [ADR-07] | "Doesn't hurt" means: removing the feature does not lower mean CV log-RMSE |
 | IN-05 | FR-043, AC-051 | Batch endpoint accepts "up to 100" [ADR-15] | Lower bound of 1 property; an empty batch is rejected with 422 |
-| IN-06 | AC-007 | 20% stratified holdout [ADR-09] | Accepted split sizes 1,164/292 or 1,165/291 to allow for splitter rounding |
+| IN-06 | AC-007 | 20% stratified holdout [ADR-09] | Holdout size is 20% of the in-scope rows, rounded down or up by the splitter; for 2,925 rows this is exactly 2,340/585 |
 | IN-07 | AC-009 | Stratified on binned log price [ADR-09] | Each bin's share differs by at most 2 percentage points between the sets |
 | IN-08 | AC-022 | Linear branch scales numeric features [ADR-08] | Scaled columns have mean ≈ 0 and SD ≈ 1 within 1e-6 on the fitting data |
 | IN-09 | NFR-001, AC-033 | Fixed seeds, pinned versions, reproducibility [ADR-09, ADR-13, ADR-14, ADR-16] | Same selected model and hyperparameters; CV metrics equal within an absolute tolerance of 1e-6 |
@@ -48,15 +48,15 @@ In a few places the ADR states an intent in qualitative terms (for example, "bea
 
 | Term | Meaning |
 |---|---|
-| Raw dataset | The Kaggle Ames `train.csv` file (1,460 rows) [ADR-01] |
-| In-scope dataset | The raw dataset after the scope rule `GrLivArea ≤ 4000` is applied (1,456 rows) [ADR-06] |
+| Raw dataset | The full Ames Housing file (De Cock), `data/raw/train.csv` (2,930 rows, 82 columns); used in place of the 1,460-row Kaggle `train.csv` named in ADR-01, by project-owner decision recorded in the data card [ADR-01] |
+| In-scope dataset | The raw dataset after the scope rule `GrLivArea ≤ 4000` is applied (2,925 rows) [ADR-06] |
 | Development set | The 80% stratified portion of the in-scope dataset used for EDA of target relationships, CV, tuning, and selection [ADR-09] |
 | Holdout set | The 20% stratified portion of the in-scope dataset, locked; the selected model is evaluated on it exactly once [ADR-09] |
 | Final holdout evaluation | The single evaluation of the selected model on the holdout set; it produces the reported performance and gates the release [ADR-09, ADR-11] |
 | Baseline reference scoring | A one-time computation of the two baselines' holdout scores after selection is final, used only for the comparison in Section 8.5; it drives no decision (IN-12) |
 | Log-RMSE | Root mean squared error computed on `log1p(SalePrice)`; the primary metric [ADR-12] |
 | Pipeline / artifact | The single fitted object that accepts raw feature rows and returns prices in dollars [ADR-08, ADR-14] |
-| Production artifact | The pipeline refit on all 1,456 in-scope rows after the final holdout evaluation, saved with its metadata, and served by the API [ADR-11, ADR-14] |
+| Production artifact | The pipeline refit on all 2,925 in-scope rows after the final holdout evaluation, saved with its metadata, and served by the API [ADR-11, ADR-14] |
 | Candidate | One of the approved models or the approved blend [ADR-10] |
 
 ---
@@ -175,13 +175,13 @@ This section reproduces the scope fixed by ADR-03 exactly.
 | S-14 | Continuous integration | ADR-03, ADR-16 |
 | S-15 | Documentation | ADR-03, ADR-19 |
 
-The optional Kaggle submission using `test.csv` is permitted as an external sanity check only. It is not a release requirement and is never used for evaluation or selection [ADR-01].
+The optional Kaggle submission using `test.csv` [ADR-01] no longer applies: the full 2,930-row file already contains the Kaggle `test.csv` properties with their prices, so a submission would not be an independent check. Kaggle files are not used in any role.
 
 ## Out of Scope
 
 | # | Item | Reason (from ADR) |
 |---|---|---|
-| O-1 | Deep learning | Poor fit for about 1.4k tabular rows [ADR-03, ADR-10] |
+| O-1 | Deep learning | Poor fit for about 2.9k tabular rows [ADR-03, ADR-10] |
 | O-2 | AutoML | Hides the learning the project exists for [ADR-03] |
 | O-3 | Stacking meta-learners | Overfitting risk and opacity; a fixed-weight blend covers ensembling [ADR-03, ADR-10] |
 | O-4 | Kubernetes | Infrastructure overhead with no benefit at this size [ADR-03, ADR-15] |
@@ -220,11 +220,11 @@ Requirements describe **what** the system must do, not how. Tool names appear on
 
 **FR-003 — Consistent missing-value parsing.** The ingestion step must parse the raw file with an explicit, documented definition of which text tokens count as missing, so that the observed missingness of every column is the same regardless of library defaults. [ADR-04, ADR-05]
 
-*Interpretation note (IN-01):* the raw file encodes absence as the text `NA` and also contains the literal category `None` (in `MasVnrType`). Some versions of common CSV parsers treat `None` as missing by default, which silently changes missing-value counts. The ADR requires data to be treated as a contract [ADR-04]; this requirement makes that contract independent of parser behavior. Because the semantic filler maps both cases to `"None"` [ADR-05], model behavior is unaffected, but reported counts and schema checks must be stable.
+*Interpretation note (IN-01):* the raw file encodes missing values both as the text `NA` and as empty cells, and also contains the literal category `None` (in `MasVnrType`). Some versions of common CSV parsers treat `None` as missing by default, which silently changes missing-value counts. The ADR requires data to be treated as a contract [ADR-04]; this requirement makes that contract independent of parser behavior. Because the semantic filler maps both cases to `"None"` [ADR-05], model behavior is unaffected, but reported counts and schema checks must be stable.
 
 ## 6.2 Data Validation
 
-**FR-004 — Ingestion schema validation.** The system must validate the raw dataset against a Pandera schema that checks: presence of all expected columns; column data types; allowed category values taken from the data dictionary; numeric ranges; uniqueness of `Id`; and `SalePrice > 0`. Any violation must stop the run and report every failing check. [ADR-04]
+**FR-004 — Ingestion schema validation.** The system must validate the raw dataset against a Pandera schema that checks: presence of all expected columns; column data types; allowed category values taken from the data dictionary; numeric ranges; uniqueness of the identifiers `Id` and `PID`; and `SalePrice > 0`. Any violation must stop the run and report every failing check. [ADR-04]
 
 **FR-005 — Single source of allowed values.** The allowed category values and ranges used by the ingestion schema and by the API request schema must be derived from one shared configuration, so the two contracts cannot drift apart. [ADR-04, ADR-16]
 
@@ -250,7 +250,7 @@ Requirements describe **what** the system must do, not how. Tool names appear on
 
 **FR-013 — Ordinal and categorical recoding.** The system must map quality and condition scales to ordered integers (None = 0, Po = 1, Fa = 2, TA = 3, Gd = 4, Ex = 5) and must treat `MSSubClass` as a categorical feature rather than a number. [ADR-07]
 
-**FR-014 — Leakage exclusions.** The system must exclude `SaleType` and `SaleCondition` from model features, while keeping the rows that contain them. `Id` must also be excluded, as it is a record identifier, not a property attribute *(Interpretation IN-03)*. `YrSold` must be kept as the valuation-year input. [ADR-02]
+**FR-014 — Leakage exclusions.** The system must exclude `SaleType` and `SaleCondition` from model features, while keeping the rows that contain them. `Id` and `PID` must also be excluded, as they are record identifiers, not property attributes *(Interpretation IN-03)*. `YrSold` must be kept as the valuation-year input. [ADR-02]
 
 **FR-015 — Feature ablation.** Each approved engineered feature must be assessed with a cross-validation ablation (the model scored with and without it). A feature is retained only if its removal does not improve (lower) the mean CV log-RMSE *(Interpretation IN-04)*. The ablation results must be recorded. [ADR-07]
 
@@ -304,7 +304,7 @@ Requirements describe **what** the system must do, not how. Tool names appear on
 
 Baseline reference scoring, as defined in Section 8.5, is not a second evaluation of any selectable model: it is computed once, after selection is final, and is never used for selection, tuning, or any iterative decision *(Interpretation IN-12)*.
 
-**FR-034 — Production refit.** After holdout evaluation, the production artifact must be refit on all 1,456 in-scope rows using the selected hyperparameters. [ADR-11]
+**FR-034 — Production refit.** After holdout evaluation, the production artifact must be refit on all 2,925 in-scope rows using the selected hyperparameters. [ADR-11]
 
 ## 6.11 Temporal Diagnostic Evaluation
 
@@ -530,17 +530,17 @@ Each criterion states an observable result and how it is verified. Criteria are 
 
 **AC-002.** If the raw CSV's SHA-256 differs from the committed hash, training stops with a non-zero exit code and an error message naming the mismatch; no artifact or split file is written. *Verify:* test using a modified copy of the file.
 
-**AC-003** *(Interpretation IN-01)*. Ingestion reports the same missing-value count for every column on every run and every supported environment, and the documented count for `MasVnrType` matches the raw file's `NA` tokens only. *Verify:* schema test asserting per-column missing counts.
+**AC-003** *(Interpretation IN-01)*. Ingestion reports the same missing-value count for every column on every run and every supported environment, and the documented count for `MasVnrType` matches the raw file's missing tokens (`NA` and empty cells) only, never the literal text `None`. *Verify:* schema test asserting per-column missing counts.
 
 **AC-004.** The ingestion schema rejects each of the following, each in a separate test: a missing expected column; a non-numeric value in a numeric column; a category value not in the allowed list; a duplicate `Id`; a `SalePrice` ≤ 0. Each rejection names the failing column and check. *Verify:* schema tests (5 cases).
 
 **AC-005.** The ingestion schema and the API request schema read allowed categories and ranges from the same configuration source; changing an allowed value in that configuration changes both. *Verify:* test asserting both schemas expose identical allowed values.
 
-**AC-006.** After the scope rule, the in-scope dataset has exactly 1,456 rows, no row has `GrLivArea > 4000`, and the 4 removed `Id` values are recorded in the run output. *Verify:* automated test plus logged run output.
+**AC-006.** After the scope rule, the in-scope dataset has exactly 2,925 rows, no row has `GrLivArea > 4000`, and the 5 removed `Id` values are recorded in the run output. *Verify:* automated test plus logged run output.
 
-**AC-007.** The development set has 1,164 or 1,165 rows and the holdout set has 291 or 292 rows (totaling 1,456), with no shared `Id`. *Verify:* automated test.
+**AC-007.** The development set has 2,340 rows and the holdout set has 585 rows (totaling 2,925), with no shared `Id`. *Verify:* automated test.
 
-*Interpretation note (IN-06):* ADR-09 fixes a 20% holdout but not exact row counts. The exact split sizes depend on rounding in the stratified splitter; either pair is acceptable provided the total and disjointness hold.
+*Interpretation note (IN-06):* ADR-09 fixes a 20% holdout but not exact row counts. In general the split sizes depend on rounding in the stratified splitter, and either rounding is acceptable provided the total and disjointness hold; for 2,925 in-scope rows, 20% is exactly 585, so no rounding variant arises.
 
 **AC-008.** Running the split step twice produces identical development and holdout `Id` sets, and later runs read the persisted split rather than regenerating it. *Verify:* test comparing `Id` sets across runs.
 
@@ -566,7 +566,7 @@ Each criterion states an observable result and how it is verified. Criteria are 
 
 **AC-017.** Quality/condition columns are mapped as None = 0, Po = 1, Fa = 2, TA = 3, Gd = 4, Ex = 5, and `MSSubClass` is treated as categorical by the column transformer. *Verify:* unit tests.
 
-**AC-018** *(`Id` exclusion: Interpretation IN-03)*. The fitted pipeline's input features do not include `SaleType`, `SaleCondition`, or `Id`; rows with any value of `SaleType` or `SaleCondition` remain in the training data; `YrSold` is used. *Verify:* pipeline test inspecting consumed columns and row counts.
+**AC-018** *(`Id`/`PID` exclusion: Interpretation IN-03)*. The fitted pipeline's input features do not include `SaleType`, `SaleCondition`, `Id`, or `PID`; rows with any value of `SaleType` or `SaleCondition` remain in the training data; `YrSold` is used. *Verify:* pipeline test inspecting consumed columns and row counts.
 
 **AC-019** *(Interpretation IN-04)*. A recorded ablation table lists, for each engineered feature, the mean CV log-RMSE with and without it, and every retained feature satisfies the FR-015 retention rule. *Verify:* review of the logged ablation results in MLflow.
 
@@ -624,7 +624,7 @@ Any discrete difference (items 1–3), or any CV metric difference larger than 1
 
 **AC-041** *(Interpretation IN-11, IN-12)*. The selected model beats both baselines under the Section 8.5 definition: its mean CV log-RMSE is lower than each baseline's by more than one standard error, and its final-holdout log-RMSE is lower than each baseline's holdout log-RMSE from baseline reference scoring. The baseline reference scores are used only for this comparison. *Verify:* selection record, final holdout evaluation run, and baseline reference run; automated quality gate test.
 
-**AC-042.** The production artifact's metadata records a training row count of 1,456 and the hyperparameters of the selected configuration. *Verify:* metadata inspection; automated test.
+**AC-042.** The production artifact's metadata records a training row count of 2,925 and the hyperparameters of the selected configuration. *Verify:* metadata inspection; automated test.
 
 **AC-043.** A temporal diagnostic record exists that shows log-RMSE for the selected configuration trained on 2006–2009 and evaluated on 2010, and it is labelled as not used for selection. *Verify:* review of the saved report and MLflow run.
 
@@ -694,7 +694,7 @@ Any discrete difference (items 1–3), or any CV metric difference larger than 1
 
 **AC-071.** The data card contains sections for source, license, known issues, scope rule, and missing-value semantics. *Verify:* review.
 
-**AC-072.** The model card contains intended use; out-of-scope uses (real-world valuation, homes above 4,000 sq ft, markets outside Ames 2006–2010); the holdout metrics; the temporal diagnostic result; limitations; and a statement that the production model was refit on all 1,456 rows after holdout evaluation. *Verify:* review.
+**AC-072.** The model card contains intended use; out-of-scope uses (real-world valuation, homes above 4,000 sq ft, markets outside Ames 2006–2010); the holdout metrics; the temporal diagnostic result; limitations; and a statement that the production model was refit on all 2,925 rows after holdout evaluation. *Verify:* review.
 
 **AC-073.** Every public function and class in `src/house_price` has a Google-style docstring. *Verify:* automated docstring check or code review.
 
@@ -814,7 +814,7 @@ The release is complete only when every item below is checked. This list is the 
 - [ ] Raw CSV unchanged; SHA-256 committed and verified on every run (AC-001, AC-002).
 - [ ] Ingestion schema passes on the raw file and rejects all tested invalid cases (AC-003, AC-004).
 - [ ] Ingestion and API schemas share one configuration source (AC-005).
-- [ ] Scope rule leaves 1,456 rows; removed IDs recorded (AC-006).
+- [ ] Scope rule leaves 2,925 rows; removed IDs recorded (AC-006).
 - [ ] Split persisted, reproducible, stratified, disjoint (AC-007, AC-008, AC-009).
 
 ## 11.2 Analysis
@@ -828,7 +828,7 @@ The release is complete only when every item below is checked. This list is the 
 
 - [ ] Semantic filler and feature engineer tested and stateless (AC-014, AC-015, AC-016).
 - [ ] Ordinal mapping and `MSSubClass` handling correct (AC-017).
-- [ ] `SaleType`, `SaleCondition`, `Id` excluded as features (AC-018).
+- [ ] `SaleType`, `SaleCondition`, `Id`, `PID` excluded as features (AC-018).
 - [ ] Ablation recorded; every retained feature justified (AC-019).
 - [ ] No excluded techniques present (AC-020).
 - [ ] Pipeline predicts dollars from raw rows; both branches behave as specified (AC-021 to AC-024, AC-026).
@@ -848,7 +848,7 @@ The release is complete only when every item below is checked. This list is the 
 - [ ] Holdout log-RMSE ≤ 0.13 (AC-039).
 - [ ] Holdout MAPE ≤ 10% (AC-040).
 - [ ] Both baselines beaten by a clear margin as defined in IN-11 (AC-041).
-- [ ] Production model refit on 1,456 rows (AC-042).
+- [ ] Production model refit on 2,925 rows (AC-042).
 - [ ] Temporal diagnostic reported (AC-043).
 
 ## 11.5 Artifact

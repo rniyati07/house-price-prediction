@@ -2,9 +2,9 @@
 
 **Project:** House Price Prediction — End-to-End ML Regression System
 **Document ID:** DOC-02
-**Version:** 1.1
-**Status:** Approved baseline — revision 1.1
-**Date:** 2026-09-27
+**Version:** 1.2
+**Status:** Approved baseline — revision 1.2 (dataset alignment: the project uses the full 2,930-row Ames file; see `docs/data_card.md`)
+**Date:** 2026-09-28
 **Authoritative source:** `house-price-prediction-adr.md` (ADR-000, ADR-01 to ADR-20)
 **Related documents:** DOC-01 Product Requirements and Acceptance Criteria
 
@@ -21,10 +21,10 @@ This document has two jobs.
 
 | Term | Meaning | Where it lives |
 |---|---|---|
-| **Documented property** | A characteristic of the Kaggle `train.csv` file that is already known from the dataset author's documentation (De Cock, 2011), the data dictionary, or extensive published prior analysis of this exact file. Every number in this document (row counts, target statistics, missing-value counts, category counts, the 4 homes above 4,000 sq ft, known quirks) is of this kind. | This document (version 1.1) |
+| **Documented property** | A characteristic of the project's raw file (the full 2,930-row De Cock Ames file) that is already known from the dataset author's documentation (De Cock, 2011), the data dictionary, or the M2 ingestion and validation profile of this file (`reports/data_validation/`). Every number in this document (row counts, target statistics, missing-value counts, category counts, the 5 homes above 4,000 sq ft, known quirks) is of this kind. | This document (version 1.2) |
 | **Project EDA finding** | A result actually produced by this project's executed EDA notebooks or scripts, with its evidence artifact. | EDA deliverables E-01 to E-36 (Section 13), summarized in E-35 |
 
-**Status in version 1.1: this document contains no project EDA findings.** Every data characteristic stated here is a documented property **to be verified by project EDA**. Where a number or pattern is stated, the text either says "documented" or carries a tag of the form *(documented; verify: E-xx)* naming the deliverable that will provide the evidence.
+**Status in version 1.2: this document contains no project EDA findings.** Every data characteristic stated here is a documented property **to be verified by project EDA**. Where a number or pattern is stated, the text either says "documented" or carries a tag of the form *(documented; verify: E-xx)* naming the deliverable that will provide the evidence.
 
 Each documented property is handled with the same chain:
 
@@ -32,7 +32,7 @@ Each documented property is handled with the same chain:
 
 If project EDA confirms a property, E-35 records it as confirmed with the observed value, and it becomes a project EDA finding. If project EDA contradicts a property, the discrepancy is recorded in E-35 and the data card; any resulting change to a decision follows the ADR supersession process [ADR-19]. The ADR decisions themselves are final and are not reopened here: they do not wait on EDA, and a discrepancy never silently changes them.
 
-**Holdout protection.** Following DOC-01 FR-009, analyses that relate features to `SalePrice` in order to inform modeling are run on the development set only. Target-free data-quality profiling may use the full raw file. Two documented exceptions apply: the split-balance check (E-08, DOC-01 AC-009), which inspects only the target distribution to confirm the split worked; and the ADR-06 scope review (E-24 to E-26), which must use the raw file because the 4 affected rows are removed before the split. Figures quoted below for the full raw file are the dataset's documented properties, used to explain the decisions already fixed in the ADR.
+**Holdout protection.** Following DOC-01 FR-009, analyses that relate features to `SalePrice` in order to inform modeling are run on the development set only. Target-free data-quality profiling may use the full raw file. Two documented exceptions apply: the split-balance check (E-08, DOC-01 AC-009), which inspects only the target distribution to confirm the split worked; and the ADR-06 scope review (E-24 to E-26), which must use the raw file because the 5 affected rows are removed before the split. Figures quoted below for the full raw file are the dataset's documented properties, used to explain the decisions already fixed in the ADR.
 
 ---
 
@@ -42,24 +42,26 @@ If project EDA confirms a property, E-35 records it as confirmed with the observ
 
 The dataset is the **Ames Housing dataset**, compiled by Dean De Cock of Truman State University from the Ames, Iowa Assessor's Office and published in the *Journal of Statistics Education* in 2011. It was built specifically as a modern, richer teaching alternative to the Boston Housing dataset.
 
-The project uses the version distributed through the Kaggle competition *"House Prices: Advanced Regression Techniques."* Only the competition's `train.csv` is used for modeling, because it is the only file with labels [ADR-01]. The competition's `test.csv` has no `SalePrice` column and so cannot be used to evaluate anything; it may be used only for an optional Kaggle submission as an external sanity check [ADR-01].
+The project uses the full De Cock file (2,930 sales), stored as `data/raw/train.csv`. ADR-01 named the 1,460-row `train.csv` of the Kaggle competition *"House Prices: Advanced Regression Techniques"*, which is a subset of this file; the project uses the full file instead by project-owner decision (recorded in the data card). The full file also contains the properties of the Kaggle `test.csv`, with their prices, so no Kaggle file is used in any role, including the optional Kaggle submission [ADR-01].
 
 ## 1.2 Size and Shape
 
 | Property | Value |
 |---|---|
-| Rows (properties) | 1,460 |
-| Columns | 81 |
-| Identifier | `Id` (1 column) |
+| Rows (properties) | 2,930 |
+| Columns | 82 |
+| Identifiers | `Id` (the source file's `Order` column) and `PID` (parcel ID) (2 columns) |
 | Features | 79 |
 | Target | `SalePrice` (1 column) |
 | Sale period | January 2006 – July 2010 |
 | Geography | Ames, Iowa, USA |
-| Rows after scope rule | 1,456 [ADR-06] |
-| Development set | 1,164 or 1,165 rows (80%) [ADR-09]; exact size set by the splitter (DOC-01 AC-007) |
-| Holdout set | 292 or 291 rows (20%) [ADR-09]; exact size set by the splitter (DOC-01 AC-007) |
+| Rows after scope rule | 2,925 [ADR-06] |
+| Development set | 2,340 rows (80%) [ADR-09] (DOC-01 AC-007) |
+| Holdout set | 585 rows (20%) [ADR-09] (DOC-01 AC-007) |
 
-*Status:* the raw-file shape, sale period, and the 4-row reduction to 1,456 are documented properties (verify: E-01, E-24, E-25, E-32). The 1,456 figure and the 80/20 split are also fixed by the ADR [ADR-06, ADR-09].
+*Status:* the raw-file shape, sale period, and the 5-row reduction to 2,925 are documented properties (verify: E-01, E-24, E-25, E-32). The scope rule and the 80/20 split are fixed by the ADR [ADR-06, ADR-09]; the 2,925 count is the verified count for this file, set in `configs/data.yaml`.
+
+*Column names.* The raw file's headers use the data dictionary's spelling with spaces (for example `Gr Liv Area`, `Year Remod/Add`). Ingestion renames them to the canonical names used in this document and throughout the project (`GrLivArea`, `YearRemodAdd`; `Order` becomes `Id`), as declared in `configs/schema.yaml`. Only names change; values are not modified.
 
 ## 1.3 Feature Types
 
@@ -74,7 +76,7 @@ This means the dataset has three kinds of information that must be handled diffe
 
 ## 1.4 Target Variable
 
-`SalePrice`: the recorded sale price of the property in US dollars. Documented property, to be verified by project EDA (E-05) — range in the raw file: about $34,900 to $755,000, with a median of about $163,000 and a mean of about $180,900.
+`SalePrice`: the recorded sale price of the property in US dollars. Documented property, to be verified by project EDA (E-05) — range in the raw file: $12,789 to $755,000, with a median of $160,000 and a mean of about $180,800.
 
 ## 1.5 Why This Dataset Was Selected
 
@@ -85,9 +87,9 @@ The selection reasons from ADR-01, explained in terms of what they teach:
 3. **A skewed target.** House prices are right-skewed, which makes target transformation a real, measurable decision (Section 5).
 4. **Known outliers.** The dataset author documented a small set of unusual sales, which lets the project practice outlier reasoning on a known case (Section 9).
 5. **A public data dictionary.** Every column and code is defined, so decisions can be grounded in documentation rather than guesswork.
-6. **Comparability.** Many practitioners have worked with this exact file, so results can be sanity-checked against community reference points.
+6. **Comparability.** Many practitioners have worked with this dataset (most often its 1,460-row Kaggle subset), so results can be sanity-checked against community reference points, bearing in mind that scores on the full file are not directly comparable with Kaggle leaderboard scores.
 
-Alternatives were rejected because they are too simple (California Housing), ethically problematic and removed from scikit-learn (Boston Housing), too clean (King County), or incompatible with community benchmarks (the full 2,930-row De Cock file) [ADR-01].
+Alternatives were rejected because they are too simple (California Housing), ethically problematic and removed from scikit-learn (Boston Housing), or too clean (King County) [ADR-01]. ADR-01 also preferred the Kaggle subset over the full 2,930-row De Cock file for benchmark comparability; the project now uses the full file (project-owner decision, recorded in the data card), trading direct leaderboard comparability for twice as many labeled rows.
 
 ---
 
@@ -141,9 +143,9 @@ The 79 features are grouped below by what they describe. Each group lists its bu
 
 **Columns:** `Neighborhood`, `MSZoning`, `Condition1`, `Condition2`
 
-**Business meaning.** Location is widely considered the single most important non-physical driver of value. `Neighborhood` identifies one of 25 areas within Ames. `MSZoning` gives the zoning class (for example residential low density, residential medium density, commercial). `Condition1` and `Condition2` record proximity to features that raise or lower desirability, such as busy arterial roads, railroads, or positive off-site features such as parks.
+**Business meaning.** Location is widely considered the single most important non-physical driver of value. `Neighborhood` identifies one of 28 areas within Ames. `MSZoning` gives the zoning class (for example residential low density, residential medium density, commercial). `Condition1` and `Condition2` record proximity to features that raise or lower desirability, such as busy arterial roads, railroads, or positive off-site features such as parks.
 
-**Modeling relevance.** `Neighborhood` captures a large bundle of unmeasured factors (school quality, reputation, typical lot and home style). It has 25 levels, which one-hot encoding handles well at this data size; target encoding was rejected because of leakage risk [ADR-07]. `Condition2` is almost always "Norm" (normal), so it carries very little information (Section 8).
+**Modeling relevance.** `Neighborhood` captures a large bundle of unmeasured factors (school quality, reputation, typical lot and home style). It has 28 levels, which one-hot encoding handles well at this data size; target encoding was rejected because of leakage risk [ADR-07]. `Condition2` is almost always "Norm" (normal), so it carries very little information (Section 8).
 
 ## 3.2 Lot Characteristics (8 features)
 
@@ -151,7 +153,7 @@ The 79 features are grouped below by what they describe. Each group lists its bu
 
 **Business meaning.** The land the house sits on. `LotArea` is total lot size in square feet; `LotFrontage` is the length of street touching the property. Shape, contour, configuration (inside lot, corner lot, cul-de-sac), and slope affect usability and appeal. `Street` and `Alley` describe the type of road and alley access.
 
-**Modeling relevance.** `LotArea` is heavily right-skewed, with a few very large rural lots. This matters for linear models and is handled by the power transform in the linear branch [ADR-08]. `LotFrontage` is the main example of a **genuinely unknown** value (documented at about 18% missing; verify: E-09) and is imputed statistically [ADR-05]. `Alley` is mostly `NA`, meaning "no alley access" (a "feature absent" value). `Street` is almost always paved.
+**Modeling relevance.** `LotArea` is heavily right-skewed, with a few very large rural lots. This matters for linear models and is handled by the power transform in the linear branch [ADR-08]. `LotFrontage` is the main example of a **genuinely unknown** value (documented at 490 rows, about 17% missing; verify: E-09) and is imputed statistically [ADR-05]. `Alley` is mostly `NA`, meaning "no alley access" (a "feature absent" value). `Street` is almost always paved.
 
 ## 3.3 Building Type and Style (3 features)
 
@@ -199,7 +201,7 @@ The 79 features are grouped below by what they describe. Each group lists its bu
 
 **Business meaning.** Whether there is a garage, its type (attached, detached, built-in), when it was built, its interior finish, its capacity in cars, its size, and its quality and condition. `PavedDrive` describes the driveway.
 
-**Modeling relevance.** The dataset is documented to contain 81 houses with no garage (verify: E-09, E-11); for these, the garage categorical columns and `GarageYrBlt` are `NA`. `GarageYrBlt` cannot be meaningfully "imputed" for a garage that does not exist, which is why it is replaced by `HasGarage` and `GarageAge` [ADR-05]. `GarageCars` and `GarageArea` measure nearly the same thing and are strongly correlated, another multicollinearity case for linear models.
+**Modeling relevance.** The dataset is documented to contain 157 houses with no garage (verify: E-09, E-11); for these, the garage categorical columns and `GarageYrBlt` are `NA`. Two further houses have a garage type but other garage fields unrecorded (Section 6.6). `GarageYrBlt` cannot be meaningfully "imputed" for a garage that does not exist, which is why it is replaced by `HasGarage` and `GarageAge` [ADR-05]. `GarageCars` and `GarageArea` measure nearly the same thing and are strongly correlated, another multicollinearity case for linear models.
 
 ## 3.9 Exterior and Structure (9 features)
 
@@ -207,7 +209,7 @@ The 79 features are grouped below by what they describe. Each group lists its bu
 
 **Business meaning.** The outside of the house: roof style and material, primary and secondary siding materials, masonry veneer (for example brick facing) type and area, foundation type, and the quality and condition of exterior materials.
 
-**Modeling relevance.** `ExterQual` is a quality scale that maps to ordered integers [ADR-07]. `Foundation` often acts as an age proxy (poured concrete is common in newer homes). `RoofMatl` is dominated by one value (standard composite shingle), so its rare categories carry little reliable information. `Exterior1st` and `Exterior2nd` have 15 and 16 levels respectively, the highest cardinality after `Neighborhood`. `MasVnrType` requires careful parsing (Section 6.5).
+**Modeling relevance.** `ExterQual` is a quality scale that maps to ordered integers [ADR-07]. `Foundation` often acts as an age proxy (poured concrete is common in newer homes). `RoofMatl` is dominated by one value (standard composite shingle), so its rare categories carry little reliable information. `Exterior1st` and `Exterior2nd` have 16 and 17 levels respectively in the raw file, the highest cardinality after `Neighborhood`. `MasVnrType` requires careful parsing (Section 6.5).
 
 ## 3.10 Utilities and Systems (5 features)
 
@@ -215,7 +217,7 @@ The 79 features are grouped below by what they describe. Each group lists its bu
 
 **Business meaning.** Services and mechanical systems: available utilities, heating type and quality, central air conditioning, and electrical system type.
 
-**Modeling relevance.** `Utilities` is effectively constant (all but one house has all public utilities) and so contributes almost no information. `Heating` is dominated by gas forced-air. `CentralAir` is a meaningful yes/no signal, since houses without central air tend to be older and cheaper. `HeatingQC` is a quality scale. `Electrical` has a single genuinely unknown value, imputed with the most frequent category [ADR-05].
+**Modeling relevance.** `Utilities` is effectively constant (all but three houses have all public utilities) and so contributes almost no information. `Heating` is dominated by gas forced-air. `CentralAir` is a meaningful yes/no signal, since houses without central air tend to be older and cheaper. `HeatingQC` is a quality scale. `Electrical` has a single genuinely unknown value, imputed with the most frequent category [ADR-05].
 
 ## 3.11 Interior Amenities (3 features)
 
@@ -223,7 +225,7 @@ The 79 features are grouped below by what they describe. Each group lists its bu
 
 **Business meaning.** The number and quality of fireplaces, and kitchen quality. Kitchens are widely considered one of the most value-relevant rooms in a home.
 
-**Modeling relevance.** `KitchenQual` is a quality scale and is expected to be among the stronger categorical predictors. `FireplaceQu` is `NA` for houses without a fireplace ("feature absent"; documented count 690, verify: E-09) [ADR-05]. `HasFireplace` captures the presence signal directly [ADR-07].
+**Modeling relevance.** `KitchenQual` is a quality scale and is expected to be among the stronger categorical predictors. `FireplaceQu` is `NA` for houses without a fireplace ("feature absent"; documented count 1,422, verify: E-09) [ADR-05]. `HasFireplace` captures the presence signal directly [ADR-07].
 
 ## 3.12 Outdoor Features (8 features)
 
@@ -231,7 +233,7 @@ The 79 features are grouped below by what they describe. Each group lists its bu
 
 **Business meaning.** Outdoor living space: decks, four types of porches, a pool, and fencing.
 
-**Modeling relevance.** Most houses have zero area in most of these columns, which produces heavily zero-inflated distributions. Individually, each porch type is sparse and noisy; together they describe a household's outdoor living space, which motivates `TotalPorchSF` [ADR-07]. The dataset is documented to contain only 7 houses with a pool, so `PoolQC` is about 99.5% `NA` ("no pool"; verify: E-09, E-13). Pools are too rare to learn much about, but `HasPool` preserves the presence signal [ADR-05, ADR-07].
+**Modeling relevance.** Most houses have zero area in most of these columns, which produces heavily zero-inflated distributions. Individually, each porch type is sparse and noisy; together they describe a household's outdoor living space, which motivates `TotalPorchSF` [ADR-07]. The dataset is documented to contain only 13 houses with a pool, so `PoolQC` is about 99.6% `NA` ("no pool"; verify: E-09, E-13). Pools are too rare to learn much about, but `HasPool` preserves the presence signal [ADR-05, ADR-07].
 
 ## 3.13 Miscellaneous (2 features)
 
@@ -283,9 +285,9 @@ EDA exists to answer specific questions whose answers shape modeling. Each quest
 
 | # | Question | Evidence | Informs |
 |---|---|---|---|
-| Q1 | Does the raw file match the expected shape (1,460 × 81), column names, and types? | E-01 | Ingestion schema [ADR-04] |
+| Q1 | Does the raw file match the expected shape (2,930 × 82), column names, and types? | E-01 | Ingestion schema [ADR-04] |
 | Q2 | Are all category values within the data dictionary's allowed codes? | E-02 | Allowed-value config [ADR-04] |
-| Q3 | Is `Id` unique and is every `SalePrice` positive? | E-03 | Schema checks [ADR-04] |
+| Q3 | Are `Id` and `PID` unique and is every `SalePrice` positive? | E-03 | Schema checks [ADR-04] |
 | Q4 | Does the CSV parser change missing-value counts depending on its defaults? | E-04 | Parsing contract (DOC-01 FR-003) |
 
 ## 4.2 Target
@@ -339,22 +341,22 @@ EDA exists to answer specific questions whose answers shape modeling. Each quest
 
 ## 5.1 Distribution of SalePrice
 
-**Documented property — to be verified by project EDA (E-05, E-06).** Published properties of `SalePrice` in the raw file:
+**Documented property — to be verified by project EDA (E-05, E-06).** Properties of `SalePrice` in the raw file:
 
 | Statistic | Documented value (approximate) |
 |---|---|
-| Minimum | $34,900 |
-| Median | $163,000 |
-| Mean | $180,900 |
+| Minimum | $12,789 |
+| Median | $160,000 |
+| Mean | $180,800 |
 | Maximum | $755,000 |
-| Skewness | about 1.9 |
-| Excess kurtosis | about 6.5 |
+| Skewness | about 1.7 |
+| Excess kurtosis | about 5.1 |
 
 **What these numbers mean (assuming EDA confirms them).**
 
 - **The mean is above the median.** A small number of expensive homes pull the average up. This is the signature of **right skew**: a long tail on the high-price side.
-- **Skewness of about 1.9.** A symmetric distribution has skewness 0. Values above 1 are generally considered highly skewed.
-- **Excess kurtosis of about 6.5.** A normal distribution has excess kurtosis 0. A high value means **heavy tails**: extreme prices occur more often than a bell curve would predict.
+- **Skewness of about 1.7.** A symmetric distribution has skewness 0. Values above 1 are generally considered highly skewed.
+- **Excess kurtosis of about 5.1.** A normal distribution has excess kurtosis 0. A high value means **heavy tails**: extreme prices occur more often than a bell curve would predict.
 
 **Why house prices look like this.** Prices cannot go below zero but can rise a long way. Most homes cluster around a typical price, while a small number of large, high-quality homes sit far above. Price also tends to behave **multiplicatively**: a feature like better quality raises price by a percentage rather than by a fixed dollar amount. Multiplicative effects naturally produce right-skewed, roughly log-normal distributions.
 
@@ -368,7 +370,7 @@ The heavy right tail has three practical consequences.
 
 ## 5.3 The Effect of log1p
 
-Applying `log1p(x) = log(1 + x)` to `SalePrice` is documented to reduce skewness from about 1.9 to about 0.1, close to symmetric (verify: E-05, E-06). On the log scale:
+Applying `log1p(x) = log(1 + x)` to `SalePrice` is documented to reduce skewness from about 1.7 to about 0, close to symmetric (verify: E-05, E-06). On the log scale:
 
 - A **fixed log difference means a fixed percentage difference.** A log error of 0.1 is roughly a 10% error, whether the house costs $100,000 or $600,000.
 - Multiplicative effects become **additive**, which suits linear models.
@@ -417,16 +419,18 @@ The data dictionary uses `NA` to mean **"this house does not have this feature."
 
 | Column(s) | Documented missing count (raw file; verify: E-09) | Meaning of NA |
 |---|---|---|
-| `PoolQC` | 1,453 | No pool |
-| `MiscFeature` | 1,406 | No miscellaneous feature |
-| `Alley` | 1,369 | No alley access |
-| `Fence` | 1,179 | No fence |
-| `FireplaceQu` | 690 | No fireplace |
-| `GarageType`, `GarageFinish`, `GarageQual`, `GarageCond` | 81 each | No garage |
-| `GarageYrBlt` | 81 | No garage (no build year exists) |
-| `BsmtQual`, `BsmtCond`, `BsmtFinType1` | 37 each | No basement |
-| `BsmtExposure`, `BsmtFinType2` | 38 each | No basement for 37 rows; 1 documented anomalous row each, where a basement exists (Section 6.6) |
-| `MasVnrType`, `MasVnrArea` | 8 each | No masonry veneer recorded |
+| `PoolQC` | 2,917 | No pool |
+| `MiscFeature` | 2,824 | No miscellaneous feature |
+| `Alley` | 2,732 | No alley access |
+| `Fence` | 2,358 | No fence |
+| `FireplaceQu` | 1,422 | No fireplace |
+| `GarageType` | 157 | No garage |
+| `GarageFinish`, `GarageQual`, `GarageCond` | 159 each | No garage for 157 rows; 2 documented rows where a garage exists but these fields are unrecorded (Section 6.6) |
+| `GarageYrBlt` | 159 | No garage (no build year exists) for 157 rows; unrecorded for the same 2 rows |
+| `BsmtQual`, `BsmtCond`, `BsmtFinType1` | 80 each | No basement for 79 rows; 1 row with every basement field unrecorded (Section 6.6) |
+| `BsmtExposure` | 83 | As above, plus 3 documented anomalous rows where a basement exists (Section 6.6) |
+| `BsmtFinType2` | 81 | As above, plus 1 documented anomalous row where a basement exists (Section 6.6) |
+| `MasVnrType`, `MasVnrArea` | 23 each | No masonry veneer recorded |
 
 **Handling (Layer 1, semantic, stateless) [ADR-05]:**
 
@@ -442,7 +446,7 @@ Some values are genuinely unrecorded: the house has the attribute, but its value
 
 | Column | Documented missing count (raw file; verify: E-09) | Why it is "unknown" |
 |---|---|---|
-| `LotFrontage` | 259 (about 18%) | Every lot touches a street somewhere; the length simply was not recorded |
+| `LotFrontage` | 490 (about 17%) | Every lot touches a street somewhere; the length simply was not recorded |
 | `Electrical` | 1 | Every house has an electrical system; its type is unrecorded |
 | Any column at serving time | — | A future input may contain a missing value the training data never had |
 
@@ -462,7 +466,7 @@ A distinct risk is a category value that is allowed by the data dictionary but n
 
 ## 6.5 A Parsing Hazard: MasVnrType
 
-`MasVnrType` is documented to store both `NA` (missing, 8 rows) and the literal text `None` (no veneer, several hundred rows) (verify: E-04). Some versions of common CSV libraries treat the text `None` as missing by default. Depending on the library version, the reported missing count for this column can therefore jump from 8 to several hundred.
+`MasVnrType` is documented to store both missing values (23 rows, stored as empty cells) and the literal text `None` (no veneer, 1,752 rows) (verify: E-04). Some versions of common CSV libraries treat the text `None` as missing by default. Depending on the library version, the reported missing count for this column can therefore jump from 23 to 1,775.
 
 This matters for **reporting and schema checks**, not for the model: the semantic filler maps both to `"None"`, so model inputs are identical either way. The ingestion step parses the file with an explicit missing-value definition so counts are stable (DOC-01 FR-003). This is a good illustration of why data must be treated as a contract [ADR-04].
 
@@ -470,23 +474,25 @@ This matters for **reporting and schema checks**, not for the model: the semanti
 
 The "absent" patterns should be internally consistent. EDA must check this (Q8):
 
-- All four garage categoricals and `GarageYrBlt` should be `NA` for the same 81 rows, with `GarageArea = 0` and `GarageCars = 0` in those rows.
+- All four garage categoricals and `GarageYrBlt` should be `NA` for the same rows (157 documented), with `GarageArea = 0` and `GarageCars = 0` in those rows.
 - The basement categoricals should be `NA` together, with `TotalBsmtSF = 0`.
 - `MasVnrType` and `MasVnrArea` should be missing together.
 
 **The basement anomalies (documented; verify: E-11).** Across the basement categorical columns, the `NA` values are documented to follow two different patterns:
 
-1. **The majority pattern: feature absent.** 37 rows have `NA` in every basement categorical column and `TotalBsmtSF = 0`. These houses have no basement, and the `NA` is a true "feature absent" value.
-2. **Two exceptional rows: a semantic inconsistency.** One house has a basement but no recorded `BsmtExposure`. Another has finished area in `BsmtFinSF2` but no recorded `BsmtFinType2`. In both, the basement clearly exists, so the missing cell is not "feature absent." Semantically it is an **unknown** value that happens to sit in a column whose `NA` is otherwise defined as "absent." This is a data-quality inconsistency in the source data.
+1. **The majority pattern: feature absent.** 79 rows have `NA` in every basement categorical column and `TotalBsmtSF = 0`. These houses have no basement, and the `NA` is a true "feature absent" value.
+2. **Four exceptional rows: a semantic inconsistency.** Three houses (`Id` 67, 1797, 2780) have a basement but no recorded `BsmtExposure`. Another (`Id` 445) has finished area in `BsmtFinSF2` but no recorded `BsmtFinType2`. In each, the basement clearly exists, so the missing cell is not "feature absent." Semantically it is an **unknown** value that happens to sit in a column whose `NA` is otherwise defined as "absent." This is a data-quality inconsistency in the source data.
+
+**Related unrecorded rows (documented; verify: E-11).** The same situation occurs in three more rows: `Id` 1342 has every basement field unrecorded, including the square-footage and bathroom counts; `Id` 1357 and `Id` 2237 have a garage type (`Detchd`) but no recorded finish, quality, condition, or build year, and `Id` 2237 also lacks `GarageCars` and `GarageArea`. These cells also fall in Layer 1 columns and are handled exactly as described below.
 
 **How this fits the two-layer strategy.** This could look like a contradiction: unknown values are supposed to go to Layer 2, yet these two cells are handled by the Layer 1 semantic filler. It is resolved by how ADR-05 defines the layers:
 
 - The Layer 1 semantic filler is defined **by column**, and it is **stateless**. It applies its fixed rule to every `NA` in its listed columns, including `BsmtExposure` and `BsmtFinType2`. It does not, and by design cannot, inspect other columns to decide whether a basement exists.
 - Therefore, **the semantic filler applies according to the approved project rule**, and these two cells become `"None"`. They never reach Layer 2, because Layer 2 only sees what remains missing after Layer 1.
-- **EDA separately records the anomalous rows and their interpretation.** E-11 must identify both rows by `Id`, show the related basement columns that reveal the inconsistency, and state that the filled value `"None"` is a known approximation for these two cells. The data card records both [ADR-19].
+- **EDA separately records the anomalous rows and their interpretation.** E-11 must identify each of these rows by `Id`, show the related basement or garage columns that reveal the inconsistency, and state that the filled value (`"None"` or `0`) is a known approximation for these cells. The data card records them all [ADR-19].
 - The same rule applies at serving time: if a request supplies a basement area but a `null` basement exposure, the pipeline treats that field the same way.
 
-**This clarification does not change ADR-05.** No new imputation strategy is introduced, and the rule for these columns is exactly the approved one. The expected effect is negligible (one cell in each of two columns). Any future change to how such anomalies are handled would require a superseding ADR.
+**This clarification does not change ADR-05.** No new imputation strategy is introduced, and the rule for these columns is exactly the approved one. The expected effect is negligible (a few cells in 7 of 2,930 rows). Any future change to how such anomalies are handled would require a superseding ADR.
 
 This is a useful lesson: real datasets contain small contradictions, and a documented, deliberate handling is better than a silent one.
 
@@ -587,28 +593,28 @@ Documented strongly inter-correlated pairs (verify: E-16):
 
 | Feature | Approximate number of categories |
 |---|---|
-| `Neighborhood` | 25 |
-| `Exterior2nd` | 16 |
-| `MSSubClass` (as categorical) | 15 |
-| `Exterior1st` | 15 |
+| `Neighborhood` | 28 |
+| `Exterior2nd` | 17 |
+| `MSSubClass` (as categorical) | 16 |
+| `Exterior1st` | 16 |
 | `Condition1` | 9 |
-| `SaleType` | 9 (excluded as a feature) |
+| `SaleType` | 10 (excluded as a feature) |
 | `Condition2`, `HouseStyle`, `RoofMatl` | 8 each |
 
 Most other categoricals have between 2 and 7 levels.
 
-**Why it matters.** Cardinality determines the width of one-hot encoding in the linear branch. The highest cardinality here is 25, which produces a manageable number of columns for about 1,165 development rows. This supports the ADR decision to one-hot encode rather than use target encoding, which would add leakage risk on small data [ADR-07, ADR-08]. In the tree branch, ordinal encoding produces one column per feature regardless of cardinality [ADR-08].
+**Why it matters.** Cardinality determines the width of one-hot encoding in the linear branch. The highest cardinality here is 28, which produces a manageable number of columns for about 2,340 development rows. This supports the ADR decision to one-hot encode rather than use target encoding, which would add leakage risk on small data [ADR-07, ADR-08]. In the tree branch, ordinal encoding produces one column per feature regardless of cardinality [ADR-08].
 
 ## 8.3 Rare Categories
 
-**What to do.** List categories that appear in fewer than about 1% of rows (roughly 15 rows).
+**What to do.** List categories that appear in fewer than about 1% of rows (roughly 29 rows).
 
 **What to expect (documented; verify: E-19, E-20).** Many rare levels, for example:
 
-- `Utilities`: all but one house has all public utilities.
-- `Street`: only 6 gravel streets.
+- `Utilities`: all but three houses have all public utilities.
+- `Street`: only 12 gravel streets.
 - `Condition2`, `RoofMatl`, `Heating`: dominated by one value, with several levels appearing only a handful of times.
-- `Neighborhood`: some neighborhoods have only a few sales (the smallest is documented at 2 sales).
+- `Neighborhood`: some neighborhoods have only a few sales (the smallest is documented at 1 sale).
 
 **Why it matters.**
 
@@ -626,7 +632,7 @@ Most other categoricals have between 2 and 7 levels.
 
 | Observation | Impact | Architectural response |
 |---|---|---|
-| `Neighborhood` has 25 levels with strongly different price levels | Strong location signal | One-hot in linear branch; ordinal encoding in tree branch [ADR-08] |
+| `Neighborhood` has 28 levels with strongly different price levels | Strong location signal | One-hot in linear branch; ordinal encoding in tree branch [ADR-08] |
 | `MSSubClass` looks numeric but is a code | Numeric treatment would impose a false order | Treated as categorical [ADR-07] |
 | Rare and unseen levels | Fitting and serving must not fail on them | `handle_unknown="ignore"`; `unknown_value=-1` [ADR-08] |
 | Near-constant columns | Little information | Expected low importance; regularization and tree selection [ADR-10] |
@@ -655,24 +661,24 @@ If a scale is not monotonic, this is recorded as a known limitation of the linea
 
 ## 9.2 The Documented Anomaly
 
-The dataset's author noted in the original documentation that the data contains a small number of very large houses that behave unusually, and recommended removing houses with more than 4,000 sq ft of living area. According to that documentation and published prior analysis of the Kaggle training file, **4 houses** exceed 4,000 sq ft. The following is a documented property, to be verified by project EDA (E-24, E-25):
+The dataset's author noted in the original documentation that the data contains a small number of very large houses that behave unusually, and recommended removing houses with more than 4,000 sq ft of living area. In the project's raw file, **5 houses** exceed 4,000 sq ft (`Id` 1499, 1761, 1768, 2181, 2182; the Kaggle subset contains 4 of them). The following is a documented property, to be verified by project EDA (E-24, E-25):
 
-- **2 of them** sold for far less than their size and quality predict. Both are recorded as **partial sales**: homes that were not finished when assessed. Their prices do not reflect a completed house of that size.
-- **The other 2** are very expensive homes, among the most expensive in the file. Their prices are plausible, but they sit at the far edge of the data, where there are too few examples to learn from.
+- **3 of them** (`Id` 1499, 2181, 2182) sold for far less than their size and quality predict. All three are recorded as **partial sales**: homes that were not finished when assessed. Their prices do not reflect a completed house of that size.
+- **The other 2** (`Id` 1761, 1768) are very expensive homes, among the most expensive in the file. Their prices are plausible, but they sit at the far edge of the data, where there are too few examples to learn from.
 
-**Why the first pair is especially harmful.** In a scatter plot of `GrLivArea` against price, these two points sit at the extreme right with low prices. Points far from the average of a feature have high **leverage**: a linear model will tilt its fitted line toward them to reduce their large squared errors. Two points out of 1,460 can noticeably flatten the estimated size–price slope for everyone else (verify: E-26).
+**Why the partial sales are especially harmful.** In a scatter plot of `GrLivArea` against price, these three points sit at the extreme right with low prices. Points far from the average of a feature have high **leverage**: a linear model will tilt its fitted line toward them to reduce their large squared errors. Three points out of 2,930 can noticeably flatten the estimated size–price slope for everyone else (verify: E-26).
 
-**If EDA finds a different count.** The scope rule itself (`GrLivArea ≤ 4000`) is fixed by ADR-06 and applies regardless. The in-scope row count of 1,456 is also stated in the ADR and in DOC-01 (AC-006), so if project EDA found a number of affected rows other than 4, that discrepancy would be recorded in E-35 and handled through the ADR supersession process, not silently absorbed.
+**If EDA finds a different count.** The scope rule itself (`GrLivArea ≤ 4000`) is fixed by ADR-06 and applies regardless. The in-scope row count of 2,925 is stated in DOC-01 (AC-006) and enforced from `configs/data.yaml`, so if project EDA found a number of affected rows other than 5, that discrepancy would be recorded in E-35 and handled through the ADR supersession process, not silently absorbed.
 
 ## 9.3 Why the Rule Excludes Properties Above 4,000 sq ft
 
-ADR-06 applies one documented rule: **the model covers homes with `GrLivArea ≤ 4000` sq ft.** Rows above this are removed before splitting (leaving 1,456 rows), and the API still accepts such homes but flags them with `out_of_domain: true` [ADR-06, ADR-15].
+ADR-06 applies one documented rule: **the model covers homes with `GrLivArea ≤ 4000` sq ft.** Rows above this are removed before splitting (leaving 2,925 rows), and the API still accepts such homes but flags them with `out_of_domain: true` [ADR-06, ADR-15].
 
 Reasons:
 
 1. **It follows the dataset author's own recommendation**, which is documented and external to this project, so it is not a result-driven choice.
-2. **The high-end region is too sparse to learn.** Four houses cannot define how prices behave above 4,000 sq ft. Any prediction there is extrapolation.
-3. **It protects the fit for everyone else.** Removing the high-leverage partial sales keeps them from distorting the size effect for the other 1,456 homes.
+2. **The high-end region is too sparse to learn.** Five houses cannot define how prices behave above 4,000 sq ft. Any prediction there is extrapolation.
+3. **It protects the fit for everyone else.** Removing the high-leverage partial sales keeps them from distorting the size effect for the other 2,925 homes.
 4. **It is simple, transparent, and fixed in advance.** One threshold, stated in the data card, is easy to audit.
 
 ## 9.4 Why This Is a Scope Decision, Not a Cleaning Decision
@@ -704,7 +710,7 @@ Because the same rule applies at every stage, the reported metrics are honest: t
 - The log target and linear-branch power transform handle the remaining long tails without deleting data [ADR-02, ADR-08].
 - The model makes **no reliable claim** for homes over 4,000 sq ft. This is accepted and documented [ADR-06, ADR-19].
 
-**EDA must produce (Q15, Q16):** a scatter plot of `GrLivArea` against price (on both scales) with the 4 houses highlighted; a table of those 4 houses showing `Id`, size, price, quality, and sale condition; and a before-and-after comparison of a simple linear fit's slope with and without them (E-24, E-25, E-26). These deliverables use the raw dataset, because the 4 rows are removed before the split and so appear in neither the development set nor the holdout set. This is the ADR-06 scope-review exception in DOC-01 FR-009: the evidence documents a decision already fixed by the ADR and informs no other modeling choice.
+**EDA must produce (Q15, Q16):** a scatter plot of `GrLivArea` against price (on both scales) with the 5 houses highlighted; a table of those 5 houses showing `Id`, size, price, quality, and sale condition; and a before-and-after comparison of a simple linear fit's slope with and without them (E-24, E-25, E-26). These deliverables use the raw dataset, because the 5 rows are removed before the split and so appear in neither the development set nor the holdout set. This is the ADR-06 scope-review exception in DOC-01 FR-009: the evidence documents a decision already fixed by the ADR and informs no other modeling choice.
 
 ---
 
@@ -722,7 +728,7 @@ This section documents the reasoning for each approved feature: its business mea
 
 *Status:* every "Expected relationship" below is a **hypothesis** grounded in real-estate logic and documented dataset properties. None is an observed project result yet. Evidence: E-27 and E-28 (development set), with the retention decision in E-30. **Consequence if confirmed:** the feature enters the ablation study with its motivation documented. **If not confirmed:** the mismatch is recorded in E-35; retention is still decided only by the ADR-07 ablation rule, not by the hypothesis.
 
-A useful general principle: **trees and linear models benefit from engineered features in different ways.** Linear models cannot add columns together or detect "zero versus non-zero" on their own, so aggregates and flags give them information they could not otherwise use. Trees can in principle discover such patterns, but with about 1,165 rows they learn more reliably when a meaningful quantity is given directly.
+A useful general principle: **trees and linear models benefit from engineered features in different ways.** Linear models cannot add columns together or detect "zero versus non-zero" on their own, so aggregates and flags give them information they could not otherwise use. Trees can in principle discover such patterns, but with about 2,340 rows they learn more reliably when a meaningful quantity is given directly.
 
 ## 10.2 TotalSF
 
@@ -808,7 +814,7 @@ A useful general principle: **trees and linear models benefit from engineered fe
 
 **Intuition.** Having a feature is often a different kind of value from how large it is. A house with no garage is in a different market segment than one with a small garage.
 
-**Why they help.** In zero-inflated columns, "zero" means absent and positive values mean size. A linear model given only the area column must use one slope for both, which blurs the effect. A flag lets it represent a jump for presence separately from a slope for size. `HasPool` in particular preserves the only reliable signal from pools, since only 7 houses have one [ADR-05, ADR-07].
+**Why they help.** In zero-inflated columns, "zero" means absent and positive values mean size. A linear model given only the area column must use one slope for both, which blurs the effect. A flag lets it represent a jump for presence separately from a slope for size. `HasPool` in particular preserves the only reliable signal from pools, since only 13 houses have one [ADR-05, ADR-07].
 
 **Expected relationships.**
 
@@ -857,8 +863,8 @@ A useful general principle: **trees and linear models benefit from engineered fe
 ## 10.12 Techniques Deliberately Not Used
 
 - **Automated feature generation:** produces features that cannot be explained.
-- **Polynomial expansion:** creates far too many features for about 1,165 development rows.
-- **Target encoding:** real leakage risk on small data; one-hot handles 25 neighborhoods well.
+- **Polynomial expansion:** creates far too many features for about 2,340 development rows.
+- **Target encoding:** real leakage risk on small data; one-hot handles 28 neighborhoods well.
 - **PCA:** removes interpretability without a clear benefit here [ADR-07].
 
 The resulting feature set leaves some leaderboard score behind compared with aggressive feature engineering. That is an accepted tradeoff for explainability and learning value [ADR-07].
@@ -926,7 +932,7 @@ Excluded as a feature [ADR-02].
 | `MoSold` | Yes, as the valuation month | Kept as provided |
 | `SaleType` | No: transaction outcome | Excluded [ADR-02] |
 | `SaleCondition` | No: transaction outcome | Excluded [ADR-02] |
-| `Id` | Not a property attribute | Excluded as a record identifier |
+| `Id`, `PID` | Not property attributes | Excluded as record identifiers |
 
 ## 11.7 Consequences If Leakage Were Allowed
 
@@ -961,7 +967,7 @@ Some rows are **design principles** rather than data properties (for example, "p
 
 | Documented / expected property (to confirm) | Evidence | Architectural decision | Consequence if confirmed |
 |---|---|---|---|
-| `SalePrice` is right-skewed (documented skew about 1.9) and heavy-tailed | E-05, E-06 | Train on `log1p(SalePrice)` via a target wrapper [ADR-02, ADR-08] | Near-symmetric target; stable error variance; errors comparable across price levels |
+| `SalePrice` is right-skewed (documented skew about 1.7) and heavy-tailed | E-05, E-06 | Train on `log1p(SalePrice)` via a target wrapper [ADR-02, ADR-08] | Near-symmetric target; stable error variance; errors comparable across price levels |
 | Pricing errors matter in percentage terms | Design principle (business framing, Section 2) | Primary metric log-RMSE; MAE and MAPE secondary [ADR-12] | Selection reflects business value; results remain explainable in dollars |
 | Expensive homes are rare | E-05, E-08 | Stratify splits and folds on binned log price [ADR-09] | Every fold sees the full price range; more stable CV estimates |
 
@@ -970,16 +976,16 @@ Some rows are **design principles** rather than data properties (for example, "p
 | Documented / expected property (to confirm) | Evidence | Architectural decision | Consequence if confirmed |
 |---|---|---|---|
 | Most `NA`s mean "feature absent" (pool, garage, basement, fence, fireplace, alley, misc) | E-09, E-10, E-11 | Stateless semantic filling with `"None"` / `0` [ADR-05] | Absence becomes usable information; no false data |
-| Two basement rows contain `NA`s that are semantically "unknown" inside Layer 1 columns | E-11 | Unchanged: the semantic filler applies by column under ADR-05; the anomalies are recorded, not re-routed (Section 6.6) [ADR-05, ADR-19] | Known, documented approximation with negligible effect |
+| A few basement and garage rows (7 documented) contain `NA`s that are semantically "unknown" inside Layer 1 columns | E-11 | Unchanged: the semantic filler applies by column under ADR-05; the anomalies are recorded, not re-routed (Section 6.6) [ADR-05, ADR-19] | Known, documented approximation with negligible effect |
 | `GarageYrBlt` is undefined when there is no garage | E-09, E-11 | Replace with `HasGarage` and `GarageAge` [ADR-05] | No invented years; age expressed meaningfully |
-| `LotFrontage` (documented about 18%) and `Electrical` (1) are truly unknown | E-09, E-12 | Fitted median + indicator / most frequent, inside the pipeline [ADR-05, ADR-08] | Leakage-free imputation; missingness itself available as a signal |
+| `LotFrontage` (documented about 17%) and `Electrical` (1) are truly unknown | E-09, E-12 | Fitted median + indicator / most frequent, inside the pipeline [ADR-05, ADR-08] | Leakage-free imputation; missingness itself available as a signal |
 | `MasVnrType` missing counts depend on parser defaults | E-04 | Explicit parsing contract (DOC-01 FR-003) under the data-as-contract principle [ADR-04] | Stable counts and schema checks across environments |
 
 ## 12.3 Outliers
 
 | Documented / expected property (to confirm) | Evidence | Architectural decision | Consequence if confirmed |
 |---|---|---|---|
-| 4 homes above 4,000 sq ft; 2 are partial sales priced far below trend; the region is too sparse to learn | E-24, E-25, E-26 | Scope rule `GrLivArea ≤ 4000` before split; API `out_of_domain` flag [ADR-06, ADR-15] | Undistorted fit; honest metrics for the served population; users warned outside it |
+| 5 homes above 4,000 sq ft; 3 are partial sales priced far below trend; the region is too sparse to learn | E-24, E-25, E-26 | Scope rule `GrLivArea ≤ 4000` before split; API `out_of_domain` flag [ADR-06, ADR-15] | Undistorted fit; honest metrics for the served population; users warned outside it |
 | Other extremes (large lots, large basements) are legitimate homes | E-18 | No statistical outlier removal [ADR-06] | Real variance preserved; model stays accurate for expensive homes |
 
 ## 12.4 Feature Engineering
@@ -1001,7 +1007,7 @@ Some rows are **design principles** rather than data properties (for example, "p
 |---|---|---|---|
 | Numeric features are skewed and zero-inflated | E-13, E-14 | Yeo-Johnson power transform + scaling in the linear branch [ADR-08] | Better-behaved inputs for linear models; zeros handled |
 | Trees are unaffected by monotonic transforms and scale | Design principle (how tree splits work) | Tree branch uses no scaling or power transform [ADR-08] | Simpler tree inputs; no wasted computation |
-| Categorical cardinality is at most 25 | E-19 | One-hot (linear) / ordinal (tree) encoding [ADR-08] | Manageable feature width; no target-encoding leakage |
+| Categorical cardinality is at most 28 | E-19 | One-hot (linear) / ordinal (tree) encoding [ADR-08] | Manageable feature width; no target-encoding leakage |
 | Rare categories may be absent from a training fold | E-20 | Unseen-category handling in both branches [ADR-08] | No crashes in CV or at serving time |
 | Preprocessing must be identical in training and serving | Design principle | Single pipeline from raw input to dollars [ADR-08] | No training–serving skew |
 
@@ -1021,9 +1027,9 @@ Some rows are **design principles** rather than data properties (for example, "p
 
 # 13. EDA Deliverables
 
-All deliverables are produced during implementation. Figures are saved to `reports/figures/`; tables are saved alongside the EDA notebooks or as MLflow artifacts; narrative conclusions appear in the EDA report notebook [ADR-17, ADR-19]. Deliverables that analyze relationships with `SalePrice` use the development set only (DOC-01 FR-009), with two documented exceptions: E-08 (split-balance check, target distribution only) and E-24 to E-26 (ADR-06 scope review, which needs the 4 rows removed before the split).
+All deliverables are produced during implementation. Figures are saved to `reports/figures/`; tables are saved alongside the EDA notebooks or as MLflow artifacts; narrative conclusions appear in the EDA report notebook [ADR-17, ADR-19]. Deliverables that analyze relationships with `SalePrice` use the development set only (DOC-01 FR-009), with two documented exceptions: E-08 (split-balance check, target distribution only) and E-24 to E-26 (ADR-06 scope review, which needs the 5 rows removed before the split).
 
-**These deliverables are where project EDA findings will live.** As of version 1.1, none has been produced. When they are, E-35 records, for every documented property stated in this document, whether it was confirmed (with the observed value) or not confirmed (with the discrepancy).
+**These deliverables are where project EDA findings will live.** As of version 1.2, none has been produced. When they are, E-35 records, for every documented property stated in this document, whether it was confirmed (with the observed value) or not confirmed (with the discrepancy).
 
 ## 13.1 Data Integrity Report (full raw file; no target relationships)
 
@@ -1031,7 +1037,7 @@ All deliverables are produced during implementation. Figures are saved to `repor
 |---|---|---|
 | E-01 | Shape and schema table | Row and column counts; each column's type; comparison with the expected schema |
 | E-02 | Allowed-values audit | For each categorical column, the observed values versus the data dictionary's allowed codes |
-| E-03 | Key integrity checks | `Id` uniqueness; `SalePrice > 0`; confirmed raw-file hash |
+| E-03 | Key integrity checks | `Id` and `PID` uniqueness; `SalePrice > 0`; confirmed raw-file hash |
 | E-04 | Parsing comparison | Per-column missing counts under the project's explicit parsing contract, with a note on how `MasVnrType` behaves under default parsing |
 
 ## 13.2 Target Analysis
@@ -1049,7 +1055,7 @@ All deliverables are produced during implementation. Figures are saved to `repor
 |---|---|---|
 | E-09 | Missing-value table | Every column with missing values: count, percentage, classification (absent / unknown), and planned handling |
 | E-10 | Missingness figure | Bar chart of missing percentages, colored by classification |
-| E-11 | Consistency checks | Garage, basement, and masonry co-missingness checks; identification by `Id` of the two documented basement anomalies, the related basement columns that reveal each inconsistency, and the recorded interpretation (Section 6.6) |
+| E-11 | Consistency checks | Garage, basement, and masonry co-missingness checks; identification by `Id` of the documented basement and garage anomalies, the related basement or garage columns that reveal each inconsistency, and the recorded interpretation (Section 6.6) |
 | E-12 | LotFrontage missingness study | Log price for rows with and without `LotFrontage` |
 
 ## 13.4 Numerical Feature Analysis
@@ -1068,7 +1074,7 @@ All deliverables are produced during implementation. Figures are saved to `repor
 | ID | Deliverable | Content |
 |---|---|---|
 | E-19 | Categorical profile table | For each categorical feature: cardinality, top category and its share, number of categories under 1% |
-| E-20 | Rare-category list | All categories with fewer than about 15 rows |
+| E-20 | Rare-category list | All categories with fewer than about 1% of rows (about 29 in the raw file) |
 | E-21 | Price-by-category plots | Box plots of log price by category for each categorical feature |
 | E-22 | Neighborhood table and plot | Row count and median log price per neighborhood |
 | E-23 | Ordinal monotonicity plots | Median log price per level for each quality/condition scale, in None → Ex order, with a monotonicity note per scale |
@@ -1077,9 +1083,9 @@ All deliverables are produced during implementation. Figures are saved to `repor
 
 | ID | Deliverable | Content |
 |---|---|---|
-| E-24 | Scope rule figure | `GrLivArea` versus price (raw and log) with the 4 homes above 4,000 sq ft highlighted |
-| E-25 | Scope rule table | The 4 homes: `Id`, `GrLivArea`, `SalePrice`, `OverallQual`, `SaleCondition` |
-| E-26 | Leverage comparison | Slope of a simple linear fit of log price on `GrLivArea`, with and without the 4 homes |
+| E-24 | Scope rule figure | `GrLivArea` versus price (raw and log) with the 5 homes above 4,000 sq ft highlighted |
+| E-25 | Scope rule table | The 5 homes: `Id`, `GrLivArea`, `SalePrice`, `OverallQual`, `SaleCondition` |
+| E-26 | Leverage comparison | Slope of a simple linear fit of log price on `GrLivArea`, with and without the 5 homes |
 
 ## 13.7 Feature Engineering Assessment
 
@@ -1104,7 +1110,7 @@ All deliverables are produced during implementation. Figures are saved to `repor
 | ID | Deliverable | Content |
 |---|---|---|
 | E-35 | EDA narrative notebook | Answers to every EDA question Q1–Q19 (Section 4) with references to the evidence above; a confirmation register listing every documented property in this document as confirmed (with observed value) or not confirmed (with discrepancy); and a written conclusion for each engineered feature and preprocessing branch (DOC-01 AC-013) |
-| E-36 | Data card inputs | Documented known issues (parsing hazard, basement inconsistencies, remodel-date floor, rare categories) handed to the data card [ADR-19] |
+| E-36 | Data card inputs | Documented known issues (parsing hazard, basement and garage inconsistencies, remodel-date floor, rare categories) handed to the data card [ADR-19] |
 
 ---
 
@@ -1112,11 +1118,11 @@ All deliverables are produced during implementation. Figures are saved to `repor
 
 ## 14.1 Dataset Size
 
-The 1,456 in-scope rows, and the 1,164–1,165 rows of the development set, are a small dataset. Consequences:
+The 2,925 in-scope rows, and the 2,340 rows of the development set, are a small dataset. Consequences:
 
 - **Noisy performance estimates.** The same model can score noticeably differently on different splits. This is why the project uses repeated CV, reports standard errors, and applies the one-standard-error rule [ADR-09, ADR-11].
 - **Limited room for complexity.** Many features, many parameters, and aggressive tuning risk fitting noise. This motivates the small feature set, regularization, and bounded tuning budgets [ADR-07, ADR-10, ADR-13].
-- **Small holdout.** About 291–292 rows gives an unbiased estimate, but its uncertainty is still meaningful. The holdout score should be read as an estimate with a margin, not as an exact number.
+- **Small holdout.** 585 rows gives an unbiased estimate, but its uncertainty is still meaningful. The holdout score should be read as an estimate with a margin, not as an exact number.
 
 ## 14.2 Geographic Limitations
 
@@ -1134,7 +1140,7 @@ Sales run from 2006 to mid-2010, a period that includes the 2008 financial crisi
 ## 14.4 Small-Sample Risks
 
 - **Rare categories** give unreliable estimates and may be missing from some folds (Section 8.3).
-- **Rare features** such as pools (documented at 7 houses) cannot be learned reliably.
+- **Rare features** such as pools (documented at 13 houses) cannot be learned reliably.
 - **Selection noise:** with small data, many candidates can look different by chance. The one-standard-error rule and the preference for simpler models guard against over-reading small differences [ADR-11].
 - **Tuning optimism:** tuning and comparison share the same CV, so CV scores are slightly optimistic. The locked holdout corrects for this [ADR-09].
 
@@ -1144,7 +1150,7 @@ Sales run from 2006 to mid-2010, a period that includes the 2008 financial crisi
 - **Neighborhood imbalance.** Some neighborhoods have many sales and others very few. Errors will likely be larger in sparse neighborhoods; the diagnostic gates check error by neighborhood [ADR-11].
 - **Price-range imbalance.** Expensive and very cheap homes are rarer. Stratification ensures they are represented in every fold, but the model still has fewer examples to learn from at the extremes [ADR-09].
 - **Retransformation bias.** Dollar predictions estimate the median, not the mean, so they are very slightly low on average (Section 5.5).
-- **Recording artifacts.** The 1950 floor on `YearRemodAdd` and the two basement inconsistencies are small data-quality issues that slightly affect specific features.
+- **Recording artifacts.** The 1950 floor on `YearRemodAdd` and the basement and garage recording inconsistencies (Section 6.6) are small data-quality issues that slightly affect specific features.
 
 ## 14.6 What These Limitations Mean for Use
 
@@ -1154,17 +1160,17 @@ The model is valid only as a demonstration of ML engineering on Ames homes up to
 
 # 15. EDA Conclusions
 
-*Status:* in version 1.1, these are the **expected** conclusions, based on documented properties and the reasoning in this document. They become project EDA findings only once E-35 records them as confirmed.
+*Status:* in version 1.2, these are the **expected** conclusions, based on documented properties and the reasoning in this document. They become project EDA findings only once E-35 records them as confirmed.
 
 ## 15.1 Most Important Dataset Characteristics (documented; to be confirmed)
 
 1. **Size and quality dominate price.** `OverallQual` and `GrLivArea` are the strongest single predictors, with total size and several quality scales close behind.
 2. **The target is right-skewed and heavy-tailed**, and becomes close to symmetric on the log scale.
 3. **Most missing values mean "absent,"** not "unknown." Only a few columns (mainly `LotFrontage`) are genuinely unknown.
-4. **The data mixes three feature types:** continuous quantities (many skewed or zero-inflated), nominal categories (up to 25 levels), and ordered quality scales.
+4. **The data mixes three feature types:** continuous quantities (many skewed or zero-inflated), nominal categories (up to 28 levels), and ordered quality scales.
 5. **Many features are near-constant or have rare categories**, carrying little information.
 6. **Size-related and garage-related features are strongly inter-correlated.**
-7. **Four very large homes** sit outside the region the data can support, two of them partial sales with anomalous prices.
+7. **Five very large homes** sit outside the region the data can support, three of them partial sales with anomalous prices.
 
 ## 15.2 Key Risks
 

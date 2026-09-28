@@ -2,10 +2,10 @@
 
 **Project:** House Price Prediction — End-to-End ML Regression System
 **Document ID:** DOC-05
-**Version:** 1.0
-**Status:** Approved baseline
+**Version:** 1.1
+**Status:** Approved baseline — revision 1.1 (dataset alignment: the project uses the full 2,930-row Ames file; see `docs/data_card.md`)
 **Date:** 2026-09-28
-**Authoritative sources, in precedence order:** `house-price-prediction-adr.md` → DOC-01 v1.1 → DOC-02 v1.1 → DOC-03 v1.0 → DOC-04 v1.0
+**Authoritative sources, in precedence order:** `house-price-prediction-adr.md` → DOC-01 v1.2 → DOC-02 v1.2 → DOC-03 v1.1 → DOC-04 v1.1
 
 ---
 
@@ -151,7 +151,7 @@ This section is the step-by-step setup that M1 wraps into a milestone. Do it onc
 1. Create a GitHub repository named `house-price-prediction` with a `main` branch.
 2. Clone it locally.
 3. Add a `.gitignore` covering: `data/raw/`, `data/processed/*.csv`, `artifacts/`, `mlruns/`, `models/`, `.venv/`, `__pycache__/`, `.ipynb_checkpoints/`, `.coverage`, `htmlcov/`, `.mypy_cache/`, `.ruff_cache/`, `.pytest_cache/`.
-4. Add a license file of your choice for the code, and note in the README that the dataset is subject to Kaggle's competition terms and is not redistributed.
+4. Add a license file of your choice for the code, and note in the README that the dataset (the Ames Housing data published by De Cock, 2011) is not redistributed and that users obtain it themselves under its published terms (see the data card).
 
 ## 3.2 Project Structure Creation
 
@@ -169,7 +169,7 @@ house-price-prediction/
 │   ├── config.py
 │   ├── tracking.py
 │   ├── cli.py
-│   ├── data/        (__init__, load, schema, scope, split)
+│   ├── data/        (__init__, errors, load, schema, scope, split, profile, validate)
 │   ├── features/    (__init__, semantic, engineer)
 │   ├── pipelines/   (__init__, branches, build)
 │   ├── models/      (__init__, registry, ablation, tuning, selection, train)
@@ -184,6 +184,7 @@ house-price-prediction/
 ├── reports/
 │   ├── figures/
 │   ├── eda/
+│   ├── data_validation/
 │   ├── selection/
 │   └── evaluation/
 ├── docs/
@@ -221,8 +222,8 @@ Create the configuration files with the content known at this point. Each is com
 
 | File | Created in M1 with | Completed in |
 |---|---|---|
-| `configs/data.yaml` | Raw path, processed paths, missing tokens `["NA", ""]` (DN-18), scope column and threshold (`GrLivArea`, 4000); hash left as a required field to be filled | M2 |
-| `configs/validation.yaml` | Seed 42, holdout fraction 0.2, 10 bins, 5 folds, 3 repeats, tolerance 1e-6 | M1 (complete) |
+| `configs/data.yaml` | Raw path, processed paths, missing tokens `["NA", ""]` (DN-18), scope column and threshold (`GrLivArea`, 4000); hash and expected in-scope row count (2,925) left as required fields to be filled | M2 |
+| `configs/validation.yaml` | Seed 42, holdout fraction 0.2, 10 bins, 5 folds, 3 repeats, tolerance 1e-6, split-balance tolerance 2 pp (IN-07) | M1 (complete) |
 | `configs/schema.yaml` | Structure only | M2 |
 | `configs/features.yaml` | Structure only | M4, M5, M7 |
 | `configs/models.yaml` | Structure only | M6, M7, M8 |
@@ -319,20 +320,20 @@ Milestone commit: `chore(milestone): complete M1 project foundation`; tag `m1-co
 **Dependencies.** M1.
 
 **Tasks.**
-1. Download `train.csv` from the Kaggle competition page (after accepting its rules) into `data/raw/`. Compute its SHA-256 and write it into `configs/data.yaml`.
-2. Write `configs/schema.yaml` for all 81 columns: dtype, nullable, allowed values, range, and role (`model_input`, `excluded`, `identifier`, `target`), following the range classes in DOC-03 §5.3. Nullable columns are the 19 documented as containing `NA` (DOC-04 §6.4). While writing allowed values, compare the data dictionary codes with the values that actually occur in the file and include the file's spellings where they differ (DOC-03 §5.3).
-3. Implement `data/load.py`: `load_raw()` with hash verification, explicit missing tokens (DN-18), text-first reading and casting (FR-001 to FR-003).
+1. Place the full Ames Housing file (De Cock, 2,930 rows × 82 columns) at `data/raw/train.csv`. Compute its SHA-256 and write it into `configs/data.yaml`, together with the verified in-scope row count (2,925).
+2. Write `configs/schema.yaml` for all 82 columns: canonical name and raw header (`source_name`), dtype, nullable, allowed values, range, and role (`model_input`, `excluded`, `identifier`, `target`), following the range classes in DOC-03 §5.3. `Id` (raw header `Order`) and `PID` are identifiers. Nullable columns are the 27 that contain missing values in the file (DOC-04 §6.4). While writing allowed values, compare the data dictionary codes with the values that actually occur in the file and include the file's spellings where they differ (DOC-03 §5.3).
+3. Implement `data/load.py`: `load_raw()` with file-existence and hash verification, explicit missing tokens (DN-18), text-first reading, header normalization to canonical names, and casting (FR-001 to FR-003).
 4. Implement `data/schema.py`: build the Pandera ingestion schema from `schema.yaml`, lazy validation, and a builder for the model-input subset that M11 will reuse (FR-004, FR-005).
-5. Implement `data/scope.py`: `apply_scope_rule()` with the 1,456-row assertion and the removal record (FR-006).
+5. Implement `data/scope.py`: `apply_scope_rule()` with the configured 2,925-row assertion and the removal record (FR-006).
 6. Implement `data/split.py`: `create_or_load_split()` with 10 decile bins, seed 42, persisted CSVs, `split_manifest.json`, the disjointness check, and the 2-point balance check (FR-007).
-7. Add a `__main__` block to `data/split.py` so the split can be created with `uv run python -m house_price.data.split`, and add `make validate-data` (hash check and schema only).
+7. Add a `__main__` block to `data/split.py` so the split can be created with `python -m house_price.data.split` (`make split`). Add `data/validate.py` and `make validate-data`: hash check and ingestion schema, plus the automated validation report and initial profiling (missing values, column profile, duplicate detection, data-quality flags, dataset metadata) written to `reports/data_validation/`. Profiling only reports; it never changes data (DOC-03 §5.4).
 8. Run the split **once**. Commit `data/processed/split_manifest.json`.
-9. Draft `docs/data_card.md`: source, license, the scope rule, missing-value semantics, and the documented known issues (parsing hazard, the two basement anomalies, the remodel-date floor, dictionary-versus-file spellings), each marked "documented — to be verified in M3" (FR-053).
+9. Draft `docs/data_card.md`: source, license, the scope rule, missing-value semantics, and the documented known issues (parsing hazard, the basement and garage anomalies, the remodel-date floor, dictionary-versus-file spellings), each marked "documented — to be verified in M3" (FR-053).
 
 **Files created.**
-`configs/schema.yaml` (complete), `src/house_price/data/{load,schema,scope,split}.py`, `data/processed/split_manifest.json`, `docs/data_card.md`, `tests/unit/test_load.py`, `tests/unit/test_schema.py`, `tests/unit/test_scope_split.py`, `tests/fixtures/raw_sample.csv` (a small hand-made sample for fast tests).
+`configs/schema.yaml` (complete), `src/house_price/data/{errors,load,schema,scope,split,profile,validate}.py`, `data/processed/split_manifest.json`, `reports/data_validation/*` (validation report and profiling tables), `docs/data_card.md`, `tests/conftest.py`, `tests/unit/test_load.py`, `tests/unit/test_schema.py`, `tests/unit/test_scope_split.py`, `tests/unit/test_profile.py`, `tests/unit/test_validate.py`, `tests/fixtures/raw_sample.csv` (a small sample of raw-format rows for fast tests).
 
-**Files modified.** `configs/data.yaml` (hash), `config.py` (schema model), `Makefile` (`validate-data`).
+**Files modified.** `configs/data.yaml` (hash, expected in-scope count), `config.py` (schema model), `tests/unit/test_config.py` (schema model), `Makefile` (`validate-data`, `split`), `pyproject.toml` (`data` test marker).
 
 **Tests.**
 - Raw file unchanged after loading (AC-001).
@@ -340,12 +341,13 @@ Milestone commit: `chore(milestone): complete M1 project foundation`; tag `m1-co
 - Per-column missing counts stable; `MasVnrType` counts only `NA` tokens (AC-003).
 - Five schema rejection cases (AC-004).
 - Ingestion and inference schemas read the same allowed values (AC-005).
-- 1,456 rows after the scope rule; removed `Id`s recorded (AC-006).
+- 2,925 rows after the scope rule; the 5 removed `Id`s recorded (AC-006).
 - Split sizes, disjointness, persistence, and balance (AC-007 to AC-009).
+- File-existence checks, hash generation, duplicate detection, profiling, and validation-report generation (including nothing written after a hash mismatch).
 
 Tests that need the real file are marked `@pytest.mark.data` and skipped when `data/raw/train.csv` is absent (as in CI, which never has the dataset). Fixture-based tests always run.
 
-**Expected outputs.** A validated dataset; a persisted split of 1,164/292 or 1,165/291 rows; a committed split manifest; a draft data card.
+**Expected outputs.** A validated dataset; a persisted split of 2,340/585 rows; a committed split manifest; a validation report in `reports/data_validation/`; a draft data card.
 
 **Acceptance criteria.** M2-1 to M2-8 (Section 7.2).
 
@@ -356,7 +358,7 @@ Tests that need the real file are marked `@pytest.mark.data` and skipped when `d
 - `docs(data): add draft data card`
 Milestone commit: `chore(milestone): complete M2 data ingestion and validation`; tag `m2-complete`.
 
-**Recommended verification.** Run `make validate-data`, then `uv run python -m house_price.data.split` twice: the second run must load, not regenerate. Open `split_manifest.json` and confirm the counts. Temporarily edit one byte of a copy of the CSV, point the config at it, and confirm training-side loading refuses it.
+**Recommended verification.** Run `make validate-data`, then `make split` (`python -m house_price.data.split`) twice: the second run must load, not regenerate. Open `split_manifest.json` and confirm the counts. Temporarily edit one byte of a copy of the CSV, point the config at it, and confirm training-side loading refuses it.
 
 ---
 
@@ -390,8 +392,8 @@ Milestone commit: `chore(milestone): complete M2 data ingestion and validation`;
    Notebook `07` is reserved for M4 (engineered features need `FeatureEngineer`).
 2. Save figures to `reports/figures/eda/` and tables to `reports/eda/` with names that start with the deliverable ID (for example `E-05_target_statistics.csv`).
 3. In `99_eda_report.ipynb`, create the **confirmation register** (E-35): for every documented property in DOC-02, record "confirmed" with the observed value or "not confirmed" with the discrepancy. Answer Q1–Q16, Q18, and Q19. Q17 stays open until M4 and M7.
-4. Handle discrepancies: any "not confirmed" item is written into the data card's known issues. If it affects an ADR-fixed number (for example, the scope rule does not remove exactly 4 rows), stop and follow the ADR supersession process before continuing (DOC-02 §9.2).
-5. Update the data card with confirmed known issues, including the two basement anomalies identified by `Id` (E-11).
+4. Handle discrepancies: any "not confirmed" item is written into the data card's known issues. If it affects an ADR-fixed number (for example, the scope rule does not remove exactly 5 rows), stop and follow the ADR supersession process before continuing (DOC-02 §9.2).
+5. Update the data card with confirmed known issues, including the basement and garage anomalies identified by `Id` (E-11).
 
 **Files created.** `notebooks/01…06, 08, 99`, `reports/figures/eda/*`, `reports/eda/*`.
 
@@ -442,7 +444,7 @@ Milestone commit: `chore(milestone): complete M3 exploratory data analysis`; tag
 - Input frame not mutated; output identical regardless of what `fit` saw; no fitted state (AC-015).
 - Each of the 12 formulas matches a hand-computed value, including the no-garage case (AC-016).
 - Ordinal map values and the `MSSubClass` cast (AC-017).
-- The two basement-anomaly patterns receive `"None"` (DOC-03 §6.2).
+- The documented basement and garage anomaly patterns receive `"None"` (and `0` for their numerics) (DOC-03 §6.2).
 - `clone()` works on both transformers.
 
 **Expected outputs.** Two tested transformers; E-27 to E-29 produced.
@@ -483,7 +485,7 @@ Milestone commit: `chore(milestone): complete M4 data preparation and feature en
 **Files modified.** `configs/features.yaml` (branch groups), `src/house_price/data/schema.py` (model-input column order helper, if not added in M2).
 
 **Tests.**
-- Excluded columns (`SaleType`, `SaleCondition`, `Id`) are not pipeline inputs; rows are kept (AC-018).
+- Excluded columns (`SaleType`, `SaleCondition`, `Id`, `PID`) are not pipeline inputs; rows are kept (AC-018).
 - No target encoder, polynomial features, PCA, or automated feature generator (AC-020).
 - `predict` on raw rows returns finite, positive dollars (AC-021).
 - Linear output is scaled; tree output is not; unseen category → −1 in the tree branch (AC-022).
@@ -727,7 +729,7 @@ Milestone commit: `chore(milestone): complete M9 model selection and evaluation 
 **Tests.**
 - Metadata: every required field present and non-empty; data hash and git SHA correct (AC-044, AC-045).
 - Round trip exact (AC-046).
-- Refit row count equals the input rows (1,456 in a real run; the sample size in smoke mode) (AC-042 logic).
+- Refit row count equals the input rows (2,925 in a real run; the sample size in smoke mode) (AC-042 logic).
 - Freeze refuses: an invalid version string, an existing version, a failed gate, a smoke artifact, a dirty tree outside `reports/evaluation/`, and a HEAD that differs from `git_commit`.
 - Verified load refuses a tampered artifact and a mismatched library version.
 
@@ -766,7 +768,7 @@ Milestone commit: `chore(milestone): complete M10 artifact machinery`; tag `m10-
 5. Implement `api/predict.py`: frame builder in schema order with `None` → `NaN`, the guard (SD-16), the domain flag from `metadata.scope_rule`, response assembly.
 6. Implement `api/errors.py`: 422 logging handler (locations and types only), generic 500 handler with `request_id`.
 7. Implement `api/app.py`: the lifespan with the 13 startup steps (DOC-04 §5.2), request-ID and timing middleware, the four routes, and the OpenAPI example.
-8. Implement the batch CLI `predict` subcommand (DOC-04 §10): verified load, CSV parsing with DN-18 tokens, SD-12 column rules, lazy Pandera validation with the inference schema, exit codes 0/2/3, output CSV.
+8. Implement the batch CLI `predict` subcommand (DOC-04 §10): verified load, CSV parsing with DN-18 tokens, header normalization with the ingestion mapping (raw dataset layout accepted), SD-12 column rules, lazy Pandera validation with the inference schema, exit codes 0/2/3, output CSV.
 9. Add `make serve` and `make predict`.
 10. Add the import-rule test: `house_price.api` imports nothing from `features`, `pipelines`, `models`, or `evaluation` (DOC-04 §18.1).
 
@@ -778,7 +780,7 @@ Milestone commit: `chore(milestone): complete M10 artifact machinery`; tag `m10-
 - All DOC-04 §16.1 API tests (AC-048 to AC-056, AC-058).
 - Contract parity between Pydantic and Pandera (DOC-04 §9.3).
 - Training–serving consistency: API equals direct `predict` exactly (AC-057).
-- CLI: valid file, invalid file (exit 2, no output, full report), column rules, CLI equals API (AC-062, AC-063).
+- CLI: valid file, invalid file (exit 2, no output, full report), column rules (including a raw-layout file scored without renaming, and `Id`/`PID` passed through), CLI equals API (AC-062, AC-063).
 - Startup refusals: hash mismatch, version mismatch, non-release without override, schema-hash mismatch.
 - Guard violation → 500; unexpected exception contained.
 
@@ -906,7 +908,7 @@ Tests are written in the milestone that creates the code they test. No milestone
 | Milestone | Test files introduced | Test type |
 |---|---|---|
 | M1 | `test_package.py`, `test_config.py` | Unit |
-| M2 | `test_load.py`, `test_schema.py`, `test_scope_split.py` | Unit (fixture and `data`-marked) |
+| M2 | `test_load.py`, `test_schema.py`, `test_scope_split.py`, `test_profile.py`, `test_validate.py` (and schema-model cases in `test_config.py`) | Unit (fixture and `data`-marked) |
 | M3 | Notebook review checks | Review (AC-011, AC-012) |
 | M4 | `test_semantic.py`, `test_engineer.py` | Unit |
 | M5 | `test_pipeline.py`, `test_leakage.py` | Unit, leakage |
@@ -948,7 +950,7 @@ Tests are written in the milestone that creates the code they test. No milestone
 
 ## 5.5 Tests That Need the Dataset
 
-The Kaggle dataset is not committed and is not available in CI. Tests that need the real file are marked `@pytest.mark.data` and are skipped in CI; they must pass locally before each milestone commit that touches data code. Everything else uses fixtures in `tests/fixtures/` or the smoke pipeline, which runs on a sample built from committed fixture data.
+The dataset is not committed and is not available in CI. Tests that need the real file are marked `@pytest.mark.data` and are skipped in CI; they must pass locally before each milestone commit that touches data code. Everything else uses fixtures in `tests/fixtures/` or the smoke pipeline, which runs on a sample built from committed fixture data.
 
 **Note on CI smoke training (RC-04).** Because CI has no dataset, the CI smoke stage (DN-17) runs on a committed synthetic fixture file that follows `schema.yaml` (generated once by a test helper and committed under `tests/fixtures/`). Locally, `make smoke` uses the real development set sample. Both exercise every stage.
 
@@ -1034,7 +1036,7 @@ A **failure condition** is a result that means "stop and fix before continuing".
 | M2-3 | Stable missing counts with explicit tokens | AC-003 test | Test output; E-04 later | `MasVnrType` count includes `"None"` text |
 | M2-4 | Schema rejects the five fault types and accepts the raw file | AC-004 tests | Test output | Raw file fails, or a fault passes |
 | M2-5 | One configuration source for allowed values | AC-005 test | Test output | Two separate value lists |
-| M2-6 | 1,456 in-scope rows; removed IDs recorded | AC-006 | Scope record | Any other count |
+| M2-6 | 2,925 in-scope rows; the 5 removed IDs recorded | AC-006 | Scope record | Any other count |
 | M2-7 | Split sizes, disjointness, persistence, balance ≤ 2 pp | AC-007 to AC-009 | `split_manifest.json`; test output | Regeneration on second run; imbalance |
 | M2-8 | Data card drafted | Review | `docs/data_card.md` | Missing section (AC-071 groundwork) |
 
@@ -1178,7 +1180,7 @@ The project is done when every box is checked.
 - [ ] Raw file unchanged and hash-verified on every run
 - [ ] Ingestion schema passes on the raw file; five fault types rejected
 - [ ] One configuration source for allowed values and ranges
-- [ ] 1,456 in-scope rows; split persisted, disjoint, balanced; manifest committed
+- [ ] 2,925 in-scope rows; split persisted, disjoint, balanced; manifest committed
 
 **EDA**
 - [ ] Deliverables E-01 to E-36 present
@@ -1210,7 +1212,7 @@ The project is done when every box is checked.
 - [ ] Release run holds the frozen artifact and metadata
 
 **Artifacts**
-- [ ] Refit on 1,456 rows; round trip exact
+- [ ] Refit on 2,925 rows; round trip exact
 - [ ] `metadata.json` complete; `model_sha256`, `schema_hash`, versions correct
 - [ ] Frozen version immutable; tag commit = `git_commit`
 
@@ -1332,7 +1334,7 @@ Complete this list immediately before Release Run step R5 (the holdout evaluatio
 - [ ] `models/X.Y.Z/` exists with `model.joblib` and `metadata.json`
 - [ ] `is_release=true`; `model_sha256` matches the file
 - [ ] `git_commit` = the tagged commit; `git_dirty=false`
-- [ ] `training_rows` = 1,456; `schema_hash` matches `schema.yaml`
+- [ ] `training_rows` = 2,925; `schema_hash` matches `schema.yaml`
 
 **Metric verification**
 - [ ] Holdout log-RMSE ≤ 0.13

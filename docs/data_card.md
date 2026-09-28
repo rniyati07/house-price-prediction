@@ -32,7 +32,7 @@ ADR-01 and DOC-01/DOC-02 describe the 1,460-row Kaggle `train.csv`. By project-o
 | Nullable columns | 19 | 27 |
 | Model-input columns (DN-11) | 77 | 77 |
 
-These numbers now live in configuration (`configs/data.yaml: scope.expected_rows_after`) rather than in code. The fixed numbers in DOC-01 (AC-006, AC-007, IN-06), DOC-02 §1.2 and §9, and DOC-03 still refer to the Kaggle file and need a supersession record.
+These numbers now live in configuration (`configs/data.yaml: scope.expected_rows_after`) rather than in code. DOC-01 v1.2, DOC-02 v1.2, and DOC-03 v1.1 are aligned with this dataset; DOC-04, DOC-05, and the ADR text still contain Kaggle-file assumptions.
 
 ### Column names
 

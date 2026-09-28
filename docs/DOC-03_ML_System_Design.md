@@ -2,10 +2,10 @@
 
 **Project:** House Price Prediction — End-to-End ML Regression System
 **Document ID:** DOC-03
-**Version:** 1.0
-**Status:** Approved baseline
+**Version:** 1.1
+**Status:** Approved baseline — revision 1.1 (dataset alignment: the project uses the full 2,930-row Ames file; see `docs/data_card.md`)
 **Date:** 2026-09-28
-**Authoritative sources, in precedence order:** `house-price-prediction-adr.md` (ADR-000, ADR-01 to ADR-20) → DOC-01 v1.1 → DOC-02 v1.1
+**Authoritative sources, in precedence order:** `house-price-prediction-adr.md` (ADR-000, ADR-01 to ADR-20) → DOC-01 v1.2 → DOC-02 v1.2
 **Related documents:** DOC-04 Serving and Deployment Design
 
 ---
@@ -34,7 +34,7 @@ DOC-03 is the implementation blueprint for the **training system**: everything f
 | DN-08 | Simplicity tie-break | Ridge and Lasso share the "linear" tier; within a tier, the lower mean CV score wins; exact ties go to Ridge | 11.4 |
 | DN-09 | Out-of-fold predictions | Diagnostics use each row's mean out-of-fold log prediction across the 3 repeats | 11.6 |
 | DN-10 | Temporal diagnostic data | Uses development-set rows only (2006–2009 train, 2010 test) | 13 |
-| DN-11 | Model input schema | 77 columns: the 79 features minus `SaleType` and `SaleCondition`; `Id` is never a model input | 5.6 |
+| DN-11 | Model input schema | 77 columns: the 79 features minus `SaleType` and `SaleCondition`; the identifiers `Id` and `PID` are never model inputs | 5.6 |
 | DN-12 | MSSubClass recoding | Cast to string inside the stateless feature engineer | 6.4 |
 | DN-13 | Ordinal columns | The Po–Ex mapping applies to the 10 quality/condition scale columns listed in DOC-02 §8.6 | 6.4 |
 | DN-14 | LightGBM determinism | Fixed `seed`, `deterministic=True`, `force_row_wise=True`, fixed thread count | 10.6 |
@@ -72,7 +72,7 @@ This document defines the complete training system for the House Price Predictio
 
 ## 1.4 Terminology
 
-DOC-03 uses DOC-01's terminology without change: raw dataset (1,460 rows), in-scope dataset (1,456 rows), development set, holdout set, log-RMSE, pipeline/artifact, production artifact, final holdout evaluation, baseline reference scoring. It adds:
+DOC-03 uses DOC-01's terminology without change: raw dataset (2,930 rows), in-scope dataset (2,925 rows), development set, holdout set, log-RMSE, pipeline/artifact, production artifact, final holdout evaluation, baseline reference scoring. It adds:
 
 | Term | Meaning |
 |---|---|
@@ -109,7 +109,7 @@ The logical stages, in order:
 | 1 | Raw dataset | `data/raw/train.csv`, immutable | Filesystem | ADR-01, FR-001 |
 | 2 | Validation | Hash check, explicit parsing, Pandera schema | `house_price.data` | ADR-04, FR-002 to FR-005 |
 | 3 | Data cleaning | Type casting only; no row edits other than the scope rule | `house_price.data` | ADR-04, ADR-06 |
-| 4 | Scope rule | Remove `GrLivArea > 4000` (4 documented rows) | `house_price.data.scope` | ADR-06, FR-006 |
+| 4 | Scope rule | Remove `GrLivArea > 4000` (5 documented rows) | `house_price.data.scope` | ADR-06, FR-006 |
 | 5 | Split | Stratified 80/20, persisted once | `house_price.data.split` | ADR-09, FR-007 |
 | 6 | Missing-value treatment | Layer 1 semantic filler; Layer 2 fitted imputation | **Inside the pipeline** | ADR-05, FR-011, FR-020 |
 | 7 | Feature engineering | Approved engineered features, ordinal mapping | **Inside the pipeline** | ADR-07, FR-012, FR-013 |
@@ -120,7 +120,7 @@ The logical stages, in order:
 | 12 | Model selection | 1-SE rule, simplicity order, blend rule, diagnostic gates | `house_price.models.selection` | ADR-11, FR-030 to FR-032 |
 | 13 | Holdout evaluation | Single final evaluation; baseline reference scoring | `house_price.evaluation.holdout` | ADR-09, ADR-11, FR-033 |
 | 14 | Temporal diagnostic | Development set, 2006–2009 → 2010 | `house_price.evaluation.temporal` | ADR-09, FR-035 |
-| 15 | Final refit | Selected configuration on all 1,456 rows | `house_price.models.train` | ADR-11, FR-034 |
+| 15 | Final refit | Selected configuration on all 2,925 rows | `house_price.models.train` | ADR-11, FR-034 |
 | 16 | Artifact creation | `model.joblib` + `metadata.json` | `house_price.persistence` | ADR-14, FR-038, FR-039 |
 | 17 | MLflow tracking | Every run logged throughout | `house_price.tracking` (within persistence/evaluation helpers) | ADR-16, FR-036, FR-037 |
 
@@ -154,7 +154,7 @@ The split between `train` and `evaluate` exists because a **human decision sits 
                                                                                    │
                                                                                    ▼
                                                                   [scope rule GrLivArea ≤ 4000]
-                                                                       1,460 → 1,456 rows
+                                                                       2,930 → 2,925 rows
                                                                                    │
                                                                                    ▼
                                                         [stratified split, deciles of log1p price]
@@ -187,7 +187,7 @@ The split between `train` and `evaluate` exists because a **human decision sits 
                   [temporal diagnostic: dev 2006–09 → dev 2010]
                                       │
                                       ▼
-                  [refit on all 1,456 rows] ──► models/staging/model.joblib + metadata.json
+                  [refit on all 2,925 rows] ──► models/staging/model.joblib + metadata.json
                                       │
                                       ▼  make freeze VERSION=x.y.z
                                 models/x.y.z/  (frozen, handed to DOC-04)
@@ -212,7 +212,7 @@ sequenceDiagram
 
     Dev->>CLI: make train
     CLI->>Data: load, hash check, validate, scope, split (or load split)
-    Data-->>CLI: dev set (1,164–1,165 rows), holdout path (not opened)
+    Data-->>CLI: dev set (2,340 rows), holdout path (not opened)
     CLI->>CV: generate shared 5×3 folds (seed 42, dev deciles)
     CLI->>CV: CV baselines
     CV->>ML: log runs (fold scores, mean, SE)
@@ -231,7 +231,7 @@ sequenceDiagram
     CLI->>Eval: baseline reference scoring (once)
     Eval->>ML: log runs tagged final_holdout_evaluation / baseline_reference
     CLI->>Eval: quality gates, temporal diagnostic
-    CLI->>Art: refit on 1,456 rows, write staging artifact, round-trip check
+    CLI->>Art: refit on 2,925 rows, write staging artifact, round-trip check
     Dev->>CLI: make freeze VERSION=1.0.0
     CLI->>Art: verify gates + clean git tree, stamp version
     Art->>ML: log release run with artifact and metadata
@@ -247,10 +247,10 @@ All data behavior comes from configuration [NFR-019, NFR-020, FR-021]:
 
 | File | Contents |
 |---|---|
-| `configs/data.yaml` | Raw file path, committed SHA-256, missing-value tokens (DN-18), scope column and threshold (`GrLivArea`, 4000), processed-data paths |
-| `configs/schema.yaml` | For each of the 79 feature columns plus `Id` and `SalePrice`: dtype (`int`, `float`, `category`), nullable (bool), allowed values (categoricals), inclusive numeric range, and role (`model_input`, `excluded`, `identifier`, `target`). **Single source** for both the Pandera ingestion schema and the API request schema (FR-005) |
+| `configs/data.yaml` | Raw file path, committed SHA-256, missing-value tokens (DN-18), scope column, threshold, and expected in-scope row count (`GrLivArea`, 4000, 2,925), processed-data paths, dataset name, validation-report directory |
+| `configs/schema.yaml` | For each of the 79 feature columns plus the identifiers `Id` and `PID` and the target `SalePrice`: canonical name and raw-file header (`source_name`), dtype (`int`, `float`, `category`, `string`), nullable (bool), allowed values (categoricals), inclusive numeric range, and role (`model_input`, `excluded`, `identifier`, `target`). **Single source** for both the Pandera ingestion schema and the API request schema (FR-005) |
 | `configs/features.yaml` | Feature groups (numeric, nominal, ordinal, dropped) for each branch; the semantic-filler column lists; the ordinal map; the engineered feature list; ablation outcomes (retained features per branch) |
-| `configs/validation.yaml` | Global seed, holdout fraction (0.2), number of stratification bins (10), CV folds (5) and repeats (3), reproducibility tolerance (1e-6) |
+| `configs/validation.yaml` | Global seed, holdout fraction (0.2), number of stratification bins (10), CV folds (5) and repeats (3), reproducibility tolerance (1e-6), split-balance tolerance (2 pp, IN-07) |
 | `configs/models.yaml` | Candidate definitions, reference configurations for ablation, search spaces, trial budgets, LightGBM determinism settings |
 
 Each YAML file is loaded into a Pydantic model at startup of any command. Unknown keys, missing keys, and wrong types fail immediately with a clear error (NFR-019). The SHA-256 of the concatenated, normalized configuration is recorded as `config_hash` in every MLflow run and in the artifact metadata.
@@ -262,10 +262,10 @@ Each YAML file is loaded into a Pydantic model at startup of any command. Unknow
 1. Read the path from `data.yaml`.
 2. Compute the SHA-256 of the file bytes and compare it with the committed value. On mismatch, raise a `DataIntegrityError` naming both hashes; the command exits with a non-zero code and writes nothing (FR-002, AC-002).
 3. Parse the CSV with **explicit missing-value tokens** (DN-18): default token lists are disabled, and only `NA` and the empty string are treated as missing. The literal text `None` (in `MasVnrType`) is therefore read as a category, not as missing (FR-003, IN-01, DOC-02 §6.5).
-4. Read every column as text first, then cast each column to its `schema.yaml` dtype. Casting failures are reported as schema violations rather than parser crashes.
+4. Read every column as text first, rename the raw-file headers to the canonical column names declared in `schema.yaml` (`source_name` → `name`; for example `Gr Liv Area` → `GrLivArea`, `Order` → `Id`), then cast each column to its `schema.yaml` dtype. Casting failures are reported as schema violations rather than parser crashes. Renaming changes names only, never values.
 5. Never write back to `data/raw/` (FR-001, AC-001).
 
-**Design note DN-18.** The ADR says data is a contract but does not name the tokens. `NA` is the data dictionary's token. The empty string is added so that a blank CSV cell is treated consistently as missing rather than as an invalid string; the raw training file is documented to contain no empty cells, so this does not change its missing-value counts (verified by E-04 and AC-003).
+**Design note DN-18.** The ADR says data is a contract but does not name the tokens. `NA` is the data dictionary's token. The empty string is included because the raw file uses empty cells as well as `NA` for missing values (mostly for genuinely unrecorded values such as `LotFrontage`, `GarageYrBlt`, and `MasVnrType`/`MasVnrArea`); both are counted as missing (verified by E-04 and AC-003).
 
 ## 5.3 Validation
 
@@ -273,17 +273,17 @@ Each YAML file is loaded into a Pydantic model at startup of any command. Unknow
 
 | Check | Rule | FR / AC |
 |---|---|---|
-| Column presence | All 81 columns (79 features, `Id`, `SalePrice`) present; no extra columns | FR-004, AC-004 |
+| Column presence | All 82 columns (79 features, `Id`, `PID`, `SalePrice`) present; no extra columns | FR-004, AC-004 |
 | Types | Each column matches its declared dtype after casting | FR-004, AC-004 |
 | Allowed values | Every categorical value is in its allowed list | FR-004, AC-004 |
 | Ranges | Every numeric value lies within its inclusive range | FR-004, AC-004 |
 | Nullability | Nulls only in columns declared nullable | FR-004 |
-| Identifier | `Id` unique | FR-004, AC-004 |
+| Identifier | `Id` and `PID` unique | FR-004, AC-004 |
 | Target | `SalePrice > 0` | FR-004, AC-004 |
 
 Validation runs in **lazy mode**: every failing check is collected and reported together (column, check, failing row indices), rather than stopping at the first error (FR-004).
 
-**Allowed values.** Allowed category lists are the data dictionary codes **plus the exact spellings that appear in the Kaggle file where the two differ**. The Kaggle file is documented to use some spellings that differ from the dictionary (for example `C (all)` in `MSZoning`, `Twnhs` and `Duplex` in `BldgType`, and several `Exterior2nd` spellings); DOC-02 deliverable E-02 verifies these. A dictionary code that never appears in the training file stays allowed; if it arrives at serving time it is handled as an unseen category (Section 7.5).
+**Allowed values.** Allowed category lists are the data dictionary codes **plus the exact spellings that appear in the raw file where the two differ**. The raw file is documented to use some spellings that differ from the dictionary (for example `C (all)` in `MSZoning`, `NAmes` in `Neighborhood`, `Twnhs` and `Duplex` in `BldgType`, several `Exterior2nd` spellings, and `WD ` with a trailing space in `SaleType`); DOC-02 deliverable E-02 verifies these. A dictionary code that never appears in the training file stays allowed; if it arrives at serving time it is handled as an unseen category (Section 7.5).
 
 **Ranges.** Ranges reject impossible or garbage values, not rare but legitimate ones [ADR-06: no statistical outlier removal]. They are set by column class:
 
@@ -293,7 +293,7 @@ Validation runs in **lazy mode**: every failing check is collected and reported 
 | Lot size | `LotArea`, `LotFrontage` | `> 0`; generous ceiling above the documented maximum |
 | Counts | bathrooms, bedrooms, kitchens, rooms, fireplaces, `GarageCars` | `≥ 0`; small integer ceiling (for example 20) |
 | Ratings | `OverallQual`, `OverallCond` | 1 to 10 |
-| Construction years | `YearBuilt`, `GarageYrBlt` | 1800 to 2010 |
+| Construction years | `YearBuilt`, `GarageYrBlt` | 1800 to 2010; `GarageYrBlt` ceiling 2210, because the raw file records `GarageYrBlt = 2207` for `Id` 2261 (a source typo that is not repaired; see the data card) |
 | Remodel year | `YearRemodAdd` | 1950 to 2010 (the documented recording floor, DOC-02 §10.5) |
 | Sale timing | `MoSold`, `YrSold` | 1 to 12; 2006 to 2010 (the dataset's valuation window) |
 | Money | `MiscVal`, `SalePrice` | `≥ 0`; `SalePrice > 0` |
@@ -305,8 +305,8 @@ The exact ceilings live in `schema.yaml`. They must admit every value in the raw
 Cleaning in this project is deliberately minimal:
 
 - **Type casting** per `schema.yaml` (Section 5.2).
-- **No value repair.** Values are never edited, clipped, or corrected outside the pipeline. The two documented basement anomalies (DOC-02 §6.6) stay as they are in the data and are handled by the semantic filler under the approved rule.
-- **No duplicate handling beyond the `Id` check.** The schema rejects duplicate `Id`s; no near-duplicate logic exists.
+- **No value repair.** Values are never edited, clipped, or corrected outside the pipeline. The documented basement and garage anomalies (DOC-02 §6.6) stay as they are in the data and are handled by the semantic filler under the approved rule.
+- **No duplicate handling beyond the identifier checks.** The schema rejects duplicate `Id` and `PID` values; no near-duplicate logic exists.
 - **No outlier deletion other than the scope rule** [ADR-06].
 
 **Why.** Every edit outside the pipeline is an edit the serving path would not see, creating training–serving skew [ADR-08]. Anything that must change a value belongs in a stateless pipeline step.
@@ -318,11 +318,11 @@ Cleaning in this project is deliberately minimal:
 - Removes rows where `GrLivArea > threshold` (threshold from `data.yaml`, value 4000) [ADR-06, FR-006].
 - Runs **before** the split, on the validated raw dataset.
 - Returns the in-scope frame and a record `{rule, threshold, rows_before, rows_after, removed_ids}` that is logged to MLflow and later written into the artifact metadata (so the serving layer reads the same threshold, DOC-04).
-- Asserts `rows_after == 1456`. A different count raises an error that refers the discrepancy to the ADR supersession process (DOC-02 §9.2); training does not continue on an unexpected population (AC-006).
+- Asserts `rows_after` equals the configured in-scope count (`data.yaml: scope.expected_rows_after`, 2,925). A different count raises an error that refers the discrepancy to the ADR supersession process (DOC-02 §9.2); training does not continue on an unexpected population (AC-006).
 
 ## 5.6 Feature Grouping and the Model Input Schema
 
-**Design note DN-11.** The pipeline's input is the **model input schema**: the 79 features minus `SaleType` and `SaleCondition` [ADR-02, FR-014], giving 77 columns in data-dictionary order. `Id` is an identifier and never a model input (IN-03). `SalePrice` is the target.
+**Design note DN-11.** The pipeline's input is the **model input schema**: the 79 features minus `SaleType` and `SaleCondition` [ADR-02, FR-014], giving 77 columns in data-dictionary order. `Id` and `PID` are identifiers and never model inputs (IN-03). `SalePrice` is the target.
 
 Why the excluded columns are removed **before** the pipeline rather than dropped inside it: the pipeline object is what gets served. If it expected `SaleType` and `SaleCondition` as inputs (even to drop them), every API caller would have to supply transaction-outcome information that does not exist at listing time, which is exactly the broken contract DOC-02 §11.7 warns against. Selecting the 77 columns before fitting means the fitted pipeline's `feature_names_in_` is the 77-column schema, and DOC-04's request schema is the same 77 columns.
 
@@ -344,9 +344,9 @@ Column groups used by the preprocessing branches (`features.yaml`):
 3. Write both files (including `Id` and `SalePrice`), plus a `split_manifest.json` containing both `Id` lists, the seed, the bin edges, and SHA-256 hashes of the two files.
 4. Run the split-balance check: for each bin, the share in the holdout differs from the share in the development set by at most 2 percentage points (AC-009, IN-07). This inspects only the target distribution (DOC-01 FR-009 exception).
 
-**Design note DN-01.** ADR-09 requires stratification on "binned log price" without fixing the bin count. Ten quantile bins (deciles) give about 146 in-scope rows per bin, enough for a stratified 20% draw (about 29 per bin) and for 5-fold stratification on the development set (about 23 per bin per fold). The same deciles are reused for the "error by price decile" diagnostic, so one binning definition runs through the whole project.
+**Design note DN-01.** ADR-09 requires stratification on "binned log price" without fixing the bin count. Ten quantile bins (deciles) give about 292 in-scope rows per bin, enough for a stratified 20% draw (about 58 per bin) and for 5-fold stratification on the development set (about 47 per bin per fold). The same deciles are reused for the "error by price decile" diagnostic, so one binning definition runs through the whole project.
 
-**Expected sizes.** Development set 1,164 or 1,165 rows; holdout 292 or 291 rows (AC-007, IN-06).
+**Expected sizes.** Development set 2,340 rows; holdout 585 rows (AC-007, IN-06).
 
 **Holdout isolation.** After the split, the holdout path is known to the system only through `data.yaml`. The only code path permitted to open it is `house_price.evaluation.holdout` (Section 9.4). This is enforced by test (AC-030).
 
@@ -381,7 +381,7 @@ Rules, from `features.yaml` (FR-011, AC-014):
 
 `GarageYrBlt` is **not** filled; it is consumed by `FeatureEngineer` and then placed in the dropped group [ADR-05].
 
-**Basement anomalies.** The filler works column by column and ignores other columns, as ADR-05 defines it. The two documented rows with a basement but a missing `BsmtExposure` or `BsmtFinType2` (DOC-02 §6.6) therefore receive `"None"` under the approved rule. EDA records them (E-11); no special code path exists.
+**Basement anomalies.** The filler works column by column and ignores other columns, as ADR-05 defines it. The documented rows with a basement but a missing `BsmtExposure` or `BsmtFinType2` (DOC-02 §6.6: `Id` 67, 1797, 2780, 445) therefore receive `"None"` under the approved rule. The same applies to the other documented unrecorded rows: `Id` 1342 (all basement fields) and `Id` 1357 and 2237 (garage fields; `Id` 2237's `GarageCars` and `GarageArea` become `0`). EDA records them (E-11); no special code path exists.
 
 ## 6.3 Layer 2 Placement
 
@@ -399,14 +399,14 @@ All formulas operate after `SemanticNAFiller`, so basement and garage numerics a
 | `RemodAge` | `YrSold − YearRemodAdd` | Time since last update | Negative | Same as `HouseAge`; affected by the documented 1950 floor (DOC-02 §10.5) |
 | `IsRemodeled` | `1 if YearRemodAdd ≠ YearBuilt else 0` | Has the house been updated | Weak alone; useful with ages | Physical history only |
 | `TotalPorchSF` | `OpenPorchSF + EnclosedPorch + 3SsnPorch + ScreenPorch` | Outdoor living space as one quantity (`WoodDeckSF` stays separate, DOC-02 §10.7) | Mildly positive | Physical attributes only |
-| `HasPool` | `1 if PoolArea > 0 else 0` | Presence differs from size | Uncertain (7 documented pools) | Physical |
+| `HasPool` | `1 if PoolArea > 0 else 0` | Presence differs from size | Uncertain (13 documented pools) | Physical |
 | `HasGarage` | `1 if GarageType ≠ "None" else 0` | Garage-less homes are a different segment | Clearly positive | Physical |
 | `HasBsmt` | `1 if TotalBsmtSF > 0 else 0` | Basement presence | Positive | Physical |
 | `HasFireplace` | `1 if Fireplaces > 0 else 0` | Amenity presence | Positive | Physical |
 | `Has2ndFlr` | `1 if 2ndFlrSF > 0 else 0` | Style indicator | Mixed | Physical |
 | `GarageAge` | `YrSold − GarageYrBlt` if `HasGarage = 1`, else `0` | Replaces an undefined year [ADR-05] | Weak negative | Same as `HouseAge`; `HasGarage` separates "no garage" from "new garage" |
 
-**Defensive behavior at serving.** If `GarageYrBlt` is null while `GarageType` is not `"None"` (not present in the training file, but possible in a request), `GarageAge` is left missing and is imputed by Layer 2 like any unknown numeric value. Negative ages (a valuation year before the build year) are passed through unchanged; they are not clipped, because clipping would be an undocumented value repair (Section 5.4).
+**Defensive behavior at serving.** If `GarageYrBlt` is null while `GarageType` is not `"None"` (present in the raw file for `Id` 1357 and 2237, and possible in a request), `GarageAge` is left missing and is imputed by Layer 2 like any unknown numeric value. Negative ages (a valuation year before the build year, for example `Id` 2261 with its recorded `GarageYrBlt` of 2207) are passed through unchanged; they are not clipped, because clipping would be an undocumented value repair (Section 5.4).
 
 **Recoding steps in `FeatureEngineer`** (FR-013, AC-017). These change how existing columns are represented; they add no new information and are therefore not ablated:
 
@@ -480,7 +480,7 @@ After `SemanticNAFiller` and the ordinal map, these columns are integers 0–5 w
 | Imputation | `SimpleImputer(strategy="most_frequent")` | Same | Layer 2 for unknown categoricals (`Electrical`) [ADR-05] |
 | Encoding | `OneHotEncoder(handle_unknown="ignore", sparse_output=False)` | `OrdinalEncoder(handle_unknown="use_encoded_value", unknown_value=-1)` | One-hot preserves no false order for linear models; ordinal codes give trees one column per feature [ADR-08] |
 
-Dense one-hot output is used because the matrix is small (about 1.1k rows, a few hundred columns) and dense output keeps `set_output(transform="pandas")` available throughout.
+Dense one-hot output is used because the matrix is small (about 2.3k rows, a few hundred columns) and dense output keeps `set_output(transform="pandas")` available throughout.
 
 ## 7.5 ColumnTransformer Design
 
@@ -685,7 +685,7 @@ All CV runs on the **development set only** [ADR-09, FR-024].
 
 - **Method:** grid over `alpha`, 25 log-spaced values from 1e-3 to 1e3 [ADR-13].
 - **Evaluation:** each value is scored with the standard CV runner on the shared folds.
-- **Why this range:** after standard scaling, useful `alpha` values for a few hundred features and about 1.1k rows usually lie between about 1 and 100; three decades on either side ensures the optimum is inside the grid. If the best value lands on a grid edge, the run records an `edge_warning` tag so the reviewer can see it. The range is not changed automatically.
+- **Why this range:** after standard scaling, useful `alpha` values for a few hundred features and about 2.3k rows usually lie between about 1 and 100; three decades on either side ensures the optimum is inside the grid. If the best value lands on a grid edge, the run records an `edge_warning` tag so the reviewer can see it. The range is not changed automatically.
 
 ## 10.4 Lasso Tuning (DN-06)
 
@@ -724,9 +724,9 @@ Optuna TPE, 100 trials, over exactly the parameters ADR-13 names:
 
 Fixed settings (DN-14): `random_state=42`, `deterministic=True`, `force_row_wise=True`, `n_jobs` fixed in configuration (default 1 for tuning), `verbose=-1`.
 
-**Why these ranges.** Small data favors small learning rates with more trees and moderate tree complexity; the ranges cover that region generously without spending trials on configurations that clearly over-fit (for example, hundreds of leaves on about 930 training rows per fold). **Why no early stopping.** Early stopping needs a validation split inside each training fold, which would change the ADR's CV design; the tree count is tuned directly instead.
+**Why these ranges.** Small data favors small learning rates with more trees and moderate tree complexity; the ranges cover that region generously without spending trials on configurations that clearly over-fit (for example, hundreds of leaves on about 1,870 training rows per fold). **Why no early stopping.** Early stopping needs a validation split inside each training fold, which would change the ADR's CV design; the tree count is tuned directly instead.
 
-**Cost estimate.** 100 trials × 15 fits = 1,500 LightGBM fits on about 930 rows each, laptop-scale (NFR-016). The duration is logged.
+**Cost estimate.** 100 trials × 15 fits = 1,500 LightGBM fits on about 1,870 rows each, laptop-scale (NFR-016). The duration is logged.
 
 ## 10.7 Reproducibility Controls
 
@@ -881,7 +881,7 @@ To show whether random splits hide time effects: a model trained on earlier sale
 
 ## 13.3 Limitations
 
-- 2010 rows are documented to cover January–July only (DOC-02 §14.3), and only the development-set portion is used, so the test part is small (on the order of 140 rows). Its metric has wide uncertainty.
+- 2010 rows are documented to cover January–July only (DOC-02 §14.3), and only the development-set portion is used, so the test part is small (278 rows in the persisted development set). Its metric has wide uncertainty.
 - It is a single split, with no repeats and no SE.
 - Seasonality is incomplete.
 
@@ -997,7 +997,7 @@ models/
 
 ## 15.2 joblib Artifact
 
-- **Content:** the complete fitted `TransformedTargetRegressor` of the selected configuration, refit on all 1,456 in-scope rows (FR-034, AC-042).
+- **Content:** the complete fitted `TransformedTargetRegressor` of the selected configuration, refit on all 2,925 in-scope rows (FR-034, AC-042).
 - **Serialization:** `joblib.dump` with default compression settings; loaded with `joblib.load` (FR-038).
 - **Round-trip check:** after writing, the artifact is reloaded and its predictions on the development set are compared with the in-memory pipeline's for exact equality (FR-039, AC-046).
 - **Trust boundary:** joblib (pickle) files can execute code when loaded. Only artifacts produced by this training system are ever loaded, and their integrity is checked by hash before loading (DN-15, NFR-025).
@@ -1022,7 +1022,7 @@ All fields are required and non-empty (AC-044):
 | | `feature_sets` | Retained engineered features per branch used by the model |
 | | `transformed_feature_names` | Output of `get_feature_names_out()` |
 | | `target_transform` | `{"func": "log1p", "inverse_func": "expm1"}` |
-| | `training_rows` | 1456 |
+| | `training_rows` | 2925 |
 | Metrics | `cv` | Mean, SE, and number of folds for the selected candidate |
 | | `holdout` | log-RMSE, MAE, MAPE, R² from the final holdout evaluation |
 | | `baseline_reference` | Holdout log-RMSE of both baselines |
@@ -1053,7 +1053,7 @@ All fields are required and non-empty (AC-044):
 |---|---|---|---|---|
 | QG-01 | Raw hash matches | `load_raw` | Every command | AC-002 |
 | QG-02 | Ingestion schema passes | `validate` | `train` | AC-004 |
-| QG-03 | In-scope count = 1,456 | `apply_scope_rule` | `train` | AC-006 |
+| QG-03 | In-scope count = 2,925 (configured) | `apply_scope_rule` | `train` | AC-006 |
 | QG-04 | Split disjoint, persisted, balanced within 2 pp | `create_or_load_split` | `train` | AC-007 to AC-009 |
 | QG-05 | Leakage, pipeline, and unit tests pass | CI | Merge | AC-014 to AC-027 |
 | QG-06 | Ablation table recorded | `train` | Tuning stage | AC-019 |
@@ -1063,7 +1063,7 @@ All fields are required and non-empty (AC-044):
 | QG-10 | Holdout log-RMSE ≤ 0.13 | `check_quality_gates` | `freeze` | AC-039 |
 | QG-11 | Holdout MAPE ≤ 10% | `check_quality_gates` | `freeze` | AC-040 |
 | QG-12 | Clear margin over both baselines | `check_quality_gates` | `freeze` | AC-041 |
-| QG-13 | Refit on 1,456 rows | `evaluate` | `freeze` | AC-042 |
+| QG-13 | Refit on 2,925 rows | `evaluate` | `freeze` | AC-042 |
 | QG-14 | Round trip exact; metadata complete | `evaluate` | `freeze` | AC-044 to AC-046 |
 | QG-15 | Reproducibility check passed for this commit | Release checklist | `freeze` | AC-033 |
 | QG-16 | Clean git tree; HEAD = metadata `git_commit` | `freeze` | `freeze` | AC-045 |
@@ -1103,10 +1103,13 @@ Following ADR-17's layout:
 | Path | Contents | Main FRs |
 |---|---|---|
 | `src/house_price/config.py` | Pydantic models for all YAML files; loader; `config_hash` | FR-021, NFR-019 |
-| `src/house_price/data/load.py` | `load_raw`, hash check, explicit parsing, casting | FR-001 to FR-003 |
+| `src/house_price/data/errors.py` | Data-layer exceptions (integrity, validation, scope, split) | FR-002, FR-004, NFR-004 |
+| `src/house_price/data/load.py` | `load_raw`, file and hash checks, explicit parsing, header normalization, casting | FR-001 to FR-003 |
 | `src/house_price/data/schema.py` | Pandera schema builders (ingestion and inference) from `schema.yaml` | FR-004, FR-005 |
 | `src/house_price/data/scope.py` | `apply_scope_rule` | FR-006 |
 | `src/house_price/data/split.py` | `create_or_load_split`, balance check | FR-007 |
+| `src/house_price/data/profile.py` | Target-free profiling: missing values, column profile, duplicate detection, data-quality flags, dataset metadata (reports only; changes no data) | FR-009, FR-053 |
+| `src/house_price/data/validate.py` | `validate-data` entry point; writes the validation report to `reports/data_validation/` | FR-002, FR-004 |
 | `src/house_price/features/semantic.py` | `SemanticNAFiller` | FR-011 |
 | `src/house_price/features/engineer.py` | `FeatureEngineer` (engineered features, ordinal map, `MSSubClass` cast) | FR-012, FR-013 |
 | `src/house_price/pipelines/branches.py` | Linear and tree `ColumnTransformer` builders | FR-018 to FR-020 |
@@ -1133,7 +1136,8 @@ Following ADR-17's layout:
 | Target | Action |
 |---|---|
 | `make setup` | `uv sync` from the lockfile; install pre-commit hooks |
-| `make validate-data` | Hash check and ingestion schema only |
+| `make validate-data` | Hash check and ingestion schema, plus the validation report and initial profiling (no split, no training) |
+| `make split` | Create the development/holdout split once; later runs load and verify it |
 | `make train` | `house-price train` |
 | `make evaluate` | `house-price evaluate` |
 | `make freeze VERSION=x.y.z` | `house-price freeze --version x.y.z` |
@@ -1150,6 +1154,7 @@ Following ADR-17's layout:
 | `artifacts/cv/folds.json` | No | Regenerated deterministically |
 | `configs/features.yaml` (ablation outcomes) | Yes | Retained sets are decisions and must be reviewed |
 | `reports/selection/*`, `reports/evaluation/*` | Yes | Decisions and evidence for review and the model card |
+| `reports/data_validation/*` | Yes | M2 validation report and target-free profiling; evidence for the data card |
 | `mlruns/` | No | Local tracking store |
 | `models/` | No | Artifacts; frozen versions are released as container images (DOC-04) |
 
@@ -1159,7 +1164,9 @@ Following ADR-17's layout:
 |---|---|---|
 | `tests/unit/test_load.py` | Hash check, NA tokens, raw file untouched | AC-001 to AC-003 |
 | `tests/unit/test_schema.py` | Five rejection cases; shared config with API | AC-004, AC-005 |
-| `tests/unit/test_scope_split.py` | 1,456 rows; split sizes, disjointness, persistence, balance | AC-006 to AC-009 |
+| `tests/unit/test_scope_split.py` | 2,925 rows; split sizes, disjointness, persistence, balance | AC-006 to AC-009 |
+| `tests/unit/test_profile.py` | Duplicate detection, missing-value and column profiles, data-quality flags, metadata | FR-053 groundwork |
+| `tests/unit/test_validate.py` | Validation report generation; nothing written on a missing file or hash mismatch | AC-002, AC-004 |
 | `tests/unit/test_semantic.py` | Fill rules; statelessness | AC-014, AC-015 |
 | `tests/unit/test_engineer.py` | 12 formulas; ordinal map; `MSSubClass` | AC-016, AC-017 |
 | `tests/unit/test_pipeline.py` | Dollar output, branches, unseen categories, imputation, clone, config-driven groups, excluded columns, no forbidden steps | AC-018, AC-020 to AC-024, AC-026, AC-027 |
