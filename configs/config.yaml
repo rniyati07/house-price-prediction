@@ -1,0 +1,11 @@
+project:
+  name: house-price-prediction
+  version: 0.1.0
+
+random_seed: 42
+
+data:
+  raw_path: data/raw/train.csv
+
+model:
+  target: SalePrice
