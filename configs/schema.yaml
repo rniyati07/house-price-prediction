@@ -1,0 +1,649 @@
+# Data contract (DOC-03 §5.3, FR-004, FR-005). Loaded into house_price.config.SchemaConfig.
+#
+# Single source for the Pandera ingestion schema (M2) and for the model-input / API request
+# schema (M5, M11). One entry per raw column, in raw-file order.
+#
+#   name            canonical column name used by the code base
+#   source_name     exact header in data/raw/train.csv (renamed to `name` on load)
+#   dtype           int | float | category | string   (numeric columns with missing values are float)
+#   nullable        true only for columns that contain missing values in the raw file
+#   role            model_input | excluded | identifier | target
+#   allowed_values  data-dictionary codes plus the file's own spellings where they differ
+#   min / max       inclusive range; strict_min: true makes the lower bound exclusive
+#   unique          values must be unique (identifiers)
+#
+# Range classes (DOC-03 §5.3): areas >= 0 with ceiling 20,000 (GrLivArea > 0); lot size > 0;
+# counts 0-20; ratings 1-10; construction years 1800-2010; remodel year 1950-2010;
+# MoSold 1-12; YrSold 2006-2010; money >= 0; SalePrice > 0.
+
+columns:
+  - name: "Id"
+    source_name: "Order"
+    dtype: int
+    nullable: false
+    role: identifier
+    unique: true
+    min: 1
+    note: "Row number of the source file; renamed to Id, the primary identifier."
+
+  - name: "PID"
+    source_name: "PID"
+    dtype: string
+    nullable: false
+    role: identifier
+    unique: true
+    pattern: "^[0-9]{10}$"
+    note: "Assessor parcel number, kept as text so the leading zero is preserved."
+
+  - name: "MSSubClass"
+    source_name: "MS SubClass"
+    dtype: int
+    nullable: false
+    role: model_input
+    allowed_values: [20, 30, 40, 45, 50, 60, 70, 75, 80, 85, 90, 120, 150, 160, 180, 190]
+    min: 20
+    max: 190
+    note: "Dwelling-class code, stored zero-padded in the file (e.g. 020); a code, not a quantity."
+
+  - name: "MSZoning"
+    source_name: "MS Zoning"
+    dtype: category
+    nullable: false
+    role: model_input
+    allowed_values: ["A", "C", "FV", "I", "RH", "RL", "RP", "RM", "A (agr)", "C (all)", "I (all)"]
+    note: "Includes the file's spellings that differ from the data dictionary: \"A (agr)\", \"C (all)\", \"I (all)\"."
+
+  - name: "LotFrontage"
+    source_name: "Lot Frontage"
+    dtype: float
+    nullable: true
+    role: model_input
+    min: 0
+    max: 1000
+    strict_min: true
+
+  - name: "LotArea"
+    source_name: "Lot Area"
+    dtype: int
+    nullable: false
+    role: model_input
+    min: 0
+    max: 500000
+    strict_min: true
+
+  - name: "Street"
+    source_name: "Street"
+    dtype: category
+    nullable: false
+    role: model_input
+    allowed_values: ["Grvl", "Pave"]
+
+  - name: "Alley"
+    source_name: "Alley"
+    dtype: category
+    nullable: true
+    role: model_input
+    allowed_values: ["Grvl", "Pave"]
+
+  - name: "LotShape"
+    source_name: "Lot Shape"
+    dtype: category
+    nullable: false
+    role: model_input
+    allowed_values: ["Reg", "IR1", "IR2", "IR3"]
+
+  - name: "LandContour"
+    source_name: "Land Contour"
+    dtype: category
+    nullable: false
+    role: model_input
+    allowed_values: ["Lvl", "Bnk", "HLS", "Low"]
+
+  - name: "Utilities"
+    source_name: "Utilities"
+    dtype: category
+    nullable: false
+    role: model_input
+    allowed_values: ["AllPub", "NoSewr", "NoSeWa", "ELO"]
+
+  - name: "LotConfig"
+    source_name: "Lot Config"
+    dtype: category
+    nullable: false
+    role: model_input
+    allowed_values: ["Inside", "Corner", "CulDSac", "FR2", "FR3"]
+
+  - name: "LandSlope"
+    source_name: "Land Slope"
+    dtype: category
+    nullable: false
+    role: model_input
+    allowed_values: ["Gtl", "Mod", "Sev"]
+
+  - name: "Neighborhood"
+    source_name: "Neighborhood"
+    dtype: category
+    nullable: false
+    role: model_input
+    allowed_values: ["Blmngtn", "Blueste", "BrDale", "BrkSide", "ClearCr", "CollgCr", "Crawfor", "Edwards", "Gilbert", "Greens", "GrnHill", "IDOTRR", "Landmrk", "MeadowV", "Mitchel", "Names", "NoRidge", "NPkVill", "NridgHt", "NWAmes", "OldTown", "SWISU", "Sawyer", "SawyerW", "Somerst", "StoneBr", "Timber", "Veenker", "NAmes"]
+    note: "Includes the file's spellings that differ from the data dictionary: \"NAmes\"."
+
+  - name: "Condition1"
+    source_name: "Condition 1"
+    dtype: category
+    nullable: false
+    role: model_input
+    allowed_values: ["Artery", "Feedr", "Norm", "RRNn", "RRAn", "PosN", "PosA", "RRNe", "RRAe"]
+
+  - name: "Condition2"
+    source_name: "Condition 2"
+    dtype: category
+    nullable: false
+    role: model_input
+    allowed_values: ["Artery", "Feedr", "Norm", "RRNn", "RRAn", "PosN", "PosA", "RRNe", "RRAe"]
+
+  - name: "BldgType"
+    source_name: "Bldg Type"
+    dtype: category
+    nullable: false
+    role: model_input
+    allowed_values: ["1Fam", "2FmCon", "Duplx", "TwnhsE", "TwnhsI", "2fmCon", "Duplex", "Twnhs"]
+    note: "Includes the file's spellings that differ from the data dictionary: \"2fmCon\", \"Duplex\", \"Twnhs\"."
+
+  - name: "HouseStyle"
+    source_name: "House Style"
+    dtype: category
+    nullable: false
+    role: model_input
+    allowed_values: ["1Story", "1.5Fin", "1.5Unf", "2Story", "2.5Fin", "2.5Unf", "SFoyer", "SLvl"]
+
+  - name: "OverallQual"
+    source_name: "Overall Qual"
+    dtype: int
+    nullable: false
+    role: model_input
+    min: 1
+    max: 10
+
+  - name: "OverallCond"
+    source_name: "Overall Cond"
+    dtype: int
+    nullable: false
+    role: model_input
+    min: 1
+    max: 10
+
+  - name: "YearBuilt"
+    source_name: "Year Built"
+    dtype: int
+    nullable: false
+    role: model_input
+    min: 1800
+    max: 2010
+
+  - name: "YearRemodAdd"
+    source_name: "Year Remod/Add"
+    dtype: int
+    nullable: false
+    role: model_input
+    min: 1950
+    max: 2010
+    note: "1950 is the documented recording floor (DOC-02 §10.5)."
+
+  - name: "RoofStyle"
+    source_name: "Roof Style"
+    dtype: category
+    nullable: false
+    role: model_input
+    allowed_values: ["Flat", "Gable", "Gambrel", "Hip", "Mansard", "Shed"]
+
+  - name: "RoofMatl"
+    source_name: "Roof Matl"
+    dtype: category
+    nullable: false
+    role: model_input
+    allowed_values: ["ClyTile", "CompShg", "Membran", "Metal", "Roll", "Tar&Grv", "WdShake", "WdShngl"]
+
+  - name: "Exterior1st"
+    source_name: "Exterior 1st"
+    dtype: category
+    nullable: false
+    role: model_input
+    allowed_values: ["AsbShng", "AsphShn", "BrkComm", "BrkFace", "CBlock", "CemntBd", "HdBoard", "ImStucc", "MetalSd", "Other", "Plywood", "PreCast", "Stone", "Stucco", "VinylSd", "Wd Sdng", "WdShing"]
+
+  - name: "Exterior2nd"
+    source_name: "Exterior 2nd"
+    dtype: category
+    nullable: false
+    role: model_input
+    allowed_values: ["AsbShng", "AsphShn", "BrkComm", "BrkFace", "CBlock", "CemntBd", "HdBoard", "ImStucc", "MetalSd", "Other", "Plywood", "PreCast", "Stone", "Stucco", "VinylSd", "Wd Sdng", "WdShing", "Brk Cmn", "CmentBd", "Wd Shng"]
+    note: "Includes the file's spellings that differ from the data dictionary: \"Brk Cmn\", \"CmentBd\", \"Wd Shng\"."
+
+  - name: "MasVnrType"
+    source_name: "Mas Vnr Type"
+    dtype: category
+    nullable: true
+    role: model_input
+    allowed_values: ["BrkCmn", "BrkFace", "CBlock", "None", "Stone"]
+    note: "The literal text \"None\" means no veneer and is a category, not missing (DOC-02 §6.5)."
+
+  - name: "MasVnrArea"
+    source_name: "Mas Vnr Area"
+    dtype: float
+    nullable: true
+    role: model_input
+    min: 0
+    max: 20000
+
+  - name: "ExterQual"
+    source_name: "Exter Qual"
+    dtype: category
+    nullable: false
+    role: model_input
+    allowed_values: ["Ex", "Gd", "TA", "Fa", "Po"]
+
+  - name: "ExterCond"
+    source_name: "Exter Cond"
+    dtype: category
+    nullable: false
+    role: model_input
+    allowed_values: ["Ex", "Gd", "TA", "Fa", "Po"]
+
+  - name: "Foundation"
+    source_name: "Foundation"
+    dtype: category
+    nullable: false
+    role: model_input
+    allowed_values: ["BrkTil", "CBlock", "PConc", "Slab", "Stone", "Wood"]
+
+  - name: "BsmtQual"
+    source_name: "Bsmt Qual"
+    dtype: category
+    nullable: true
+    role: model_input
+    allowed_values: ["Ex", "Gd", "TA", "Fa", "Po"]
+
+  - name: "BsmtCond"
+    source_name: "Bsmt Cond"
+    dtype: category
+    nullable: true
+    role: model_input
+    allowed_values: ["Ex", "Gd", "TA", "Fa", "Po"]
+
+  - name: "BsmtExposure"
+    source_name: "Bsmt Exposure"
+    dtype: category
+    nullable: true
+    role: model_input
+    allowed_values: ["Gd", "Av", "Mn", "No"]
+
+  - name: "BsmtFinType1"
+    source_name: "BsmtFin Type 1"
+    dtype: category
+    nullable: true
+    role: model_input
+    allowed_values: ["GLQ", "ALQ", "BLQ", "Rec", "LwQ", "Unf"]
+
+  - name: "BsmtFinSF1"
+    source_name: "BsmtFin SF 1"
+    dtype: float
+    nullable: true
+    role: model_input
+    min: 0
+    max: 20000
+
+  - name: "BsmtFinType2"
+    source_name: "BsmtFin Type 2"
+    dtype: category
+    nullable: true
+    role: model_input
+    allowed_values: ["GLQ", "ALQ", "BLQ", "Rec", "LwQ", "Unf"]
+
+  - name: "BsmtFinSF2"
+    source_name: "BsmtFin SF 2"
+    dtype: float
+    nullable: true
+    role: model_input
+    min: 0
+    max: 20000
+
+  - name: "BsmtUnfSF"
+    source_name: "Bsmt Unf SF"
+    dtype: float
+    nullable: true
+    role: model_input
+    min: 0
+    max: 20000
+
+  - name: "TotalBsmtSF"
+    source_name: "Total Bsmt SF"
+    dtype: float
+    nullable: true
+    role: model_input
+    min: 0
+    max: 20000
+
+  - name: "Heating"
+    source_name: "Heating"
+    dtype: category
+    nullable: false
+    role: model_input
+    allowed_values: ["Floor", "GasA", "GasW", "Grav", "OthW", "Wall"]
+
+  - name: "HeatingQC"
+    source_name: "Heating QC"
+    dtype: category
+    nullable: false
+    role: model_input
+    allowed_values: ["Ex", "Gd", "TA", "Fa", "Po"]
+
+  - name: "CentralAir"
+    source_name: "Central Air"
+    dtype: category
+    nullable: false
+    role: model_input
+    allowed_values: ["N", "Y"]
+
+  - name: "Electrical"
+    source_name: "Electrical"
+    dtype: category
+    nullable: true
+    role: model_input
+    allowed_values: ["SBrkr", "FuseA", "FuseF", "FuseP", "Mix"]
+
+  - name: "1stFlrSF"
+    source_name: "1st Flr SF"
+    dtype: int
+    nullable: false
+    role: model_input
+    min: 0
+    max: 20000
+
+  - name: "2ndFlrSF"
+    source_name: "2nd Flr SF"
+    dtype: int
+    nullable: false
+    role: model_input
+    min: 0
+    max: 20000
+
+  - name: "LowQualFinSF"
+    source_name: "Low Qual Fin SF"
+    dtype: int
+    nullable: false
+    role: model_input
+    min: 0
+    max: 20000
+
+  - name: "GrLivArea"
+    source_name: "Gr Liv Area"
+    dtype: int
+    nullable: false
+    role: model_input
+    min: 0
+    max: 20000
+    strict_min: true
+    note: "Scope variable (ADR-06). The ceiling is far above 4000 so out-of-scope homes still validate."
+
+  - name: "BsmtFullBath"
+    source_name: "Bsmt Full Bath"
+    dtype: float
+    nullable: true
+    role: model_input
+    min: 0
+    max: 20
+
+  - name: "BsmtHalfBath"
+    source_name: "Bsmt Half Bath"
+    dtype: float
+    nullable: true
+    role: model_input
+    min: 0
+    max: 20
+
+  - name: "FullBath"
+    source_name: "Full Bath"
+    dtype: int
+    nullable: false
+    role: model_input
+    min: 0
+    max: 20
+
+  - name: "HalfBath"
+    source_name: "Half Bath"
+    dtype: int
+    nullable: false
+    role: model_input
+    min: 0
+    max: 20
+
+  - name: "BedroomAbvGr"
+    source_name: "Bedroom AbvGr"
+    dtype: int
+    nullable: false
+    role: model_input
+    min: 0
+    max: 20
+
+  - name: "KitchenAbvGr"
+    source_name: "Kitchen AbvGr"
+    dtype: int
+    nullable: false
+    role: model_input
+    min: 0
+    max: 20
+
+  - name: "KitchenQual"
+    source_name: "Kitchen Qual"
+    dtype: category
+    nullable: false
+    role: model_input
+    allowed_values: ["Ex", "Gd", "TA", "Fa", "Po"]
+
+  - name: "TotRmsAbvGrd"
+    source_name: "TotRms AbvGrd"
+    dtype: int
+    nullable: false
+    role: model_input
+    min: 0
+    max: 20
+
+  - name: "Functional"
+    source_name: "Functional"
+    dtype: category
+    nullable: false
+    role: model_input
+    allowed_values: ["Typ", "Min1", "Min2", "Mod", "Maj1", "Maj2", "Sev", "Sal"]
+
+  - name: "Fireplaces"
+    source_name: "Fireplaces"
+    dtype: int
+    nullable: false
+    role: model_input
+    min: 0
+    max: 20
+
+  - name: "FireplaceQu"
+    source_name: "Fireplace Qu"
+    dtype: category
+    nullable: true
+    role: model_input
+    allowed_values: ["Ex", "Gd", "TA", "Fa", "Po"]
+
+  - name: "GarageType"
+    source_name: "Garage Type"
+    dtype: category
+    nullable: true
+    role: model_input
+    allowed_values: ["2Types", "Attchd", "Basment", "BuiltIn", "CarPort", "Detchd"]
+
+  - name: "GarageYrBlt"
+    source_name: "Garage Yr Blt"
+    dtype: float
+    nullable: true
+    role: model_input
+    min: 1800
+    max: 2210
+    note: "Construction-year class is 1800-2010, but the raw file contains 2207 (Id 2261, a source typo). The ceiling admits it because the raw file must validate and values are never repaired (DOC-03 §5.3, §5.4). See the data card."
+
+  - name: "GarageFinish"
+    source_name: "Garage Finish"
+    dtype: category
+    nullable: true
+    role: model_input
+    allowed_values: ["Fin", "RFn", "Unf"]
+
+  - name: "GarageCars"
+    source_name: "Garage Cars"
+    dtype: float
+    nullable: true
+    role: model_input
+    min: 0
+    max: 20
+
+  - name: "GarageArea"
+    source_name: "Garage Area"
+    dtype: float
+    nullable: true
+    role: model_input
+    min: 0
+    max: 20000
+
+  - name: "GarageQual"
+    source_name: "Garage Qual"
+    dtype: category
+    nullable: true
+    role: model_input
+    allowed_values: ["Ex", "Gd", "TA", "Fa", "Po"]
+
+  - name: "GarageCond"
+    source_name: "Garage Cond"
+    dtype: category
+    nullable: true
+    role: model_input
+    allowed_values: ["Ex", "Gd", "TA", "Fa", "Po"]
+
+  - name: "PavedDrive"
+    source_name: "Paved Drive"
+    dtype: category
+    nullable: false
+    role: model_input
+    allowed_values: ["Y", "P", "N"]
+
+  - name: "WoodDeckSF"
+    source_name: "Wood Deck SF"
+    dtype: int
+    nullable: false
+    role: model_input
+    min: 0
+    max: 20000
+
+  - name: "OpenPorchSF"
+    source_name: "Open Porch SF"
+    dtype: int
+    nullable: false
+    role: model_input
+    min: 0
+    max: 20000
+
+  - name: "EnclosedPorch"
+    source_name: "Enclosed Porch"
+    dtype: int
+    nullable: false
+    role: model_input
+    min: 0
+    max: 20000
+
+  - name: "3SsnPorch"
+    source_name: "3Ssn Porch"
+    dtype: int
+    nullable: false
+    role: model_input
+    min: 0
+    max: 20000
+
+  - name: "ScreenPorch"
+    source_name: "Screen Porch"
+    dtype: int
+    nullable: false
+    role: model_input
+    min: 0
+    max: 20000
+
+  - name: "PoolArea"
+    source_name: "Pool Area"
+    dtype: int
+    nullable: false
+    role: model_input
+    min: 0
+    max: 20000
+
+  - name: "PoolQC"
+    source_name: "Pool QC"
+    dtype: category
+    nullable: true
+    role: model_input
+    allowed_values: ["Ex", "Gd", "TA", "Fa"]
+
+  - name: "Fence"
+    source_name: "Fence"
+    dtype: category
+    nullable: true
+    role: model_input
+    allowed_values: ["GdPrv", "MnPrv", "GdWo", "MnWw"]
+
+  - name: "MiscFeature"
+    source_name: "Misc Feature"
+    dtype: category
+    nullable: true
+    role: model_input
+    allowed_values: ["Elev", "Gar2", "Othr", "Shed", "TenC"]
+
+  - name: "MiscVal"
+    source_name: "Misc Val"
+    dtype: int
+    nullable: false
+    role: model_input
+    min: 0
+    max: 1000000
+
+  - name: "MoSold"
+    source_name: "Mo Sold"
+    dtype: int
+    nullable: false
+    role: model_input
+    min: 1
+    max: 12
+
+  - name: "YrSold"
+    source_name: "Yr Sold"
+    dtype: int
+    nullable: false
+    role: model_input
+    min: 2006
+    max: 2010
+
+  - name: "SaleType"
+    source_name: "Sale Type"
+    dtype: category
+    nullable: false
+    role: excluded
+    allowed_values: ["WD", "CWD", "VWD", "New", "COD", "Con", "ConLw", "ConLI", "ConLD", "Oth", "WD "]
+    note: "Includes the file's spellings that differ from the data dictionary: \"WD \"."
+
+  - name: "SaleCondition"
+    source_name: "Sale Condition"
+    dtype: category
+    nullable: false
+    role: excluded
+    allowed_values: ["Normal", "Abnorml", "AdjLand", "Alloca", "Family", "Partial"]
+
+  - name: "SalePrice"
+    source_name: "SalePrice"
+    dtype: int
+    nullable: false
+    role: target
+    min: 0
+    max: 10000000
+    strict_min: true
+    note: "Target. SalePrice > 0 (FR-004)."

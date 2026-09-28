@@ -3,12 +3,20 @@ __pycache__/
 .pytest_cache/
 .mypy_cache/
 .ruff_cache/
+.ipynb_checkpoints/
+.coverage
+htmlcov/
 
 *.pyc
+*.egg-info/
 
+# Data: the raw file is never committed (its SHA-256 is in configs/data.yaml).
+# Split CSVs are reproducible; the split manifest is committed.
+data/raw/
 data/interim/
-data/processed/
+data/processed/*.csv
 
+artifacts/
 models/*.joblib
 
 mlruns/

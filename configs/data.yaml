@@ -1,0 +1,30 @@
+# Data configuration (DOC-03 §5.1). Loaded into house_price.config.DataConfig.
+#
+# Dataset: Ames Housing, full De Cock file (2,930 rows x 82 columns), used as the
+# project dataset by owner decision (see docs/data_card.md, "Dataset version").
+
+dataset_name: Ames Housing (De Cock, 2011), full 2,930-row file
+
+# Immutable raw file (FR-001) and its committed SHA-256 (FR-002). Loading refuses any
+# file whose hash differs. Regenerate only when the raw file is deliberately replaced.
+raw_path: data/raw/train.csv
+raw_sha256: 65a1cbb89c2b58b11674097135dd04e710df5db726bcfe6ec551de38b44e4911
+
+# DN-18: the only tokens parsed as missing. The literal text "None" is a category.
+missing_tokens: ["NA", ""]
+
+# Persisted split (FR-007). CSVs are gitignored; the manifest is committed.
+processed:
+  dev_path: data/processed/dev.csv
+  holdout_path: data/processed/holdout.csv
+  manifest_path: data/processed/split_manifest.json
+
+# Scope rule (ADR-06, FR-006): rows with GrLivArea > threshold are out of scope.
+# expected_rows_after is the verified in-scope count for this dataset (2,930 - 5).
+scope:
+  column: GrLivArea
+  threshold: 4000
+  expected_rows_after: 2925
+
+# Output directory of the automated validation report and initial profiling.
+reports_dir: reports/data_validation

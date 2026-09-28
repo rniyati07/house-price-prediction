@@ -1,0 +1,9 @@
+# Validation configuration (DOC-03 §5.1). Loaded into house_price.config.ValidationConfig.
+
+seed: 42                          # DN-02: the one global seed
+holdout_fraction: 0.2             # ADR-09: 20% locked holdout
+n_bins: 10                        # DN-01: deciles of log1p(SalePrice)
+cv_folds: 5                       # ADR-09 / DN-03 (used from M6)
+cv_repeats: 3                     # ADR-09 / DN-03 (used from M6)
+reproducibility_tolerance: 1.0e-6 # AC-033 (used from M9)
+split_balance_tolerance_pp: 2.0   # IN-07 / AC-009: max per-bin share difference
