@@ -1,0 +1,40 @@
+{
+  "dataset": "Ames Housing (De Cock, 2011), full 2,930-row file",
+  "raw_path": "data/raw/train.csv",
+  "raw_sha256": "65a1cbb89c2b58b11674097135dd04e710df5db726bcfe6ec551de38b44e4911",
+  "size_bytes": 963738,
+  "n_rows": 2930,
+  "n_columns": 82,
+  "columns_by_role": {
+    "identifier": 2,
+    "model_input": 77,
+    "excluded": 2,
+    "target": 1
+  },
+  "columns_by_dtype": {
+    "int": 27,
+    "string": 1,
+    "category": 43,
+    "float": 11
+  },
+  "n_model_input_columns": 77,
+  "missing_tokens": [
+    "NA",
+    ""
+  ],
+  "total_missing_cells": 13997,
+  "columns_with_missing": 27,
+  "rows_with_any_missing": 2930,
+  "config_hash": "1a9962948b73012f618c039ab3a348ea91b124d73d5ff51e49951d3bac4d8f8e",
+  "schema_hash": "14183a0d3138947a9b57e89f322d8fd3d94dce3c794e736727cd002ccdffa2f8",
+  "library_versions": {
+    "python": "3.14.7",
+    "pandas": "3.0.6",
+    "numpy": "2.5.3",
+    "pandera": "0.33.1",
+    "pydantic": "2.13.5",
+    "scikit-learn": "1.9.1",
+    "pyyaml": "6.0.3"
+  },
+  "generated_at_utc": "2026-09-28T15:09:53+00:00"
+}

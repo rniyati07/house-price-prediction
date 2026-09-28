@@ -1,0 +1,28 @@
+column,source_name,dtype,role,nullable,n_missing,pct_missing
+PoolQC,Pool QC,category,model_input,True,2917,99.556
+MiscFeature,Misc Feature,category,model_input,True,2824,96.382
+Alley,Alley,category,model_input,True,2732,93.242
+Fence,Fence,category,model_input,True,2358,80.478
+FireplaceQu,Fireplace Qu,category,model_input,True,1422,48.532
+LotFrontage,Lot Frontage,float,model_input,True,490,16.724
+GarageCond,Garage Cond,category,model_input,True,159,5.427
+GarageFinish,Garage Finish,category,model_input,True,159,5.427
+GarageQual,Garage Qual,category,model_input,True,159,5.427
+GarageYrBlt,Garage Yr Blt,float,model_input,True,159,5.427
+GarageType,Garage Type,category,model_input,True,157,5.358
+BsmtExposure,Bsmt Exposure,category,model_input,True,83,2.833
+BsmtFinType2,BsmtFin Type 2,category,model_input,True,81,2.765
+BsmtCond,Bsmt Cond,category,model_input,True,80,2.73
+BsmtFinType1,BsmtFin Type 1,category,model_input,True,80,2.73
+BsmtQual,Bsmt Qual,category,model_input,True,80,2.73
+MasVnrArea,Mas Vnr Area,float,model_input,True,23,0.785
+MasVnrType,Mas Vnr Type,category,model_input,True,23,0.785
+BsmtFullBath,Bsmt Full Bath,float,model_input,True,2,0.068
+BsmtHalfBath,Bsmt Half Bath,float,model_input,True,2,0.068
+BsmtFinSF1,BsmtFin SF 1,float,model_input,True,1,0.034
+BsmtFinSF2,BsmtFin SF 2,float,model_input,True,1,0.034
+BsmtUnfSF,Bsmt Unf SF,float,model_input,True,1,0.034
+Electrical,Electrical,category,model_input,True,1,0.034
+GarageArea,Garage Area,float,model_input,True,1,0.034
+GarageCars,Garage Cars,float,model_input,True,1,0.034
+TotalBsmtSF,Total Bsmt SF,float,model_input,True,1,0.034
