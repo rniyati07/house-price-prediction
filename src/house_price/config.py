@@ -161,6 +161,79 @@ class SchemaConfig(StrictModel):
         return [column for column in self.columns if column.role in roles]
 
 
+# ----------------------------------------------------------------------- features.yaml
+
+
+def _duplicates(values: list[str]) -> list[str]:
+    return sorted({value for value in values if values.count(value) > 1})
+
+
+class SemanticFillConfig(StrictModel):
+    """Layer 1 "feature absent" columns (ADR-05, DOC-03 §6.2)."""
+
+    categorical_none: list[str] = Field(min_length=1)
+    numeric_zero: list[str] = Field(min_length=1)
+
+    @model_validator(mode="after")
+    def _check_disjoint(self) -> SemanticFillConfig:
+        both = self.categorical_none + self.numeric_zero
+        if _duplicates(both):
+            raise ValueError(f"columns listed more than once: {_duplicates(both)}")
+        return self
+
+
+class OrdinalConfig(StrictModel):
+    """The Po-Ex ordinal map and the columns it applies to (DN-13)."""
+
+    columns: list[str] = Field(min_length=1)
+    mapping: dict[str, int] = Field(min_length=2)
+
+    @model_validator(mode="after")
+    def _check_map(self) -> OrdinalConfig:
+        if _duplicates(self.columns):
+            raise ValueError(f"ordinal columns listed more than once: {_duplicates(self.columns)}")
+        codes = list(self.mapping.values())
+        if sorted(codes) != list(range(len(codes))):
+            raise ValueError("ordinal codes must be 0, 1, 2, ... with no gaps or repeats")
+        return self
+
+
+class BranchGroups(StrictModel):
+    """Column groups of one preprocessing branch (DOC-03 §5.6, §7.5)."""
+
+    numeric: list[str]
+    ordinal: list[str]
+    nominal: list[str]
+    dropped: list[str]
+
+    @property
+    def all_columns(self) -> list[str]:
+        return self.numeric + self.ordinal + self.nominal + self.dropped
+
+    @model_validator(mode="after")
+    def _check_disjoint(self) -> BranchGroups:
+        if _duplicates(self.all_columns):
+            raise ValueError(f"columns in more than one group: {_duplicates(self.all_columns)}")
+        return self
+
+
+class FeatureConfig(StrictModel):
+    """``features.yaml``: filler lists, ordinal map, engineered features, branch groups."""
+
+    semantic_fill: SemanticFillConfig
+    ordinal: OrdinalConfig
+    categorical_codes: list[str]
+    engineered: list[str] = Field(min_length=1)
+    linear: BranchGroups
+    tree: BranchGroups
+
+    @model_validator(mode="after")
+    def _check_features(self) -> FeatureConfig:
+        if _duplicates(self.engineered):
+            raise ValueError(f"engineered features listed twice: {_duplicates(self.engineered)}")
+        return self
+
+
 # ------------------------------------------------------------------------------ loading
 
 ModelT = TypeVar("ModelT", bound=BaseModel)
@@ -185,6 +258,11 @@ def load_model(model: type[ModelT], path: Path) -> ModelT:
         return model.model_validate(load_yaml(path))
     except ValidationError as exc:
         raise ConfigError(f"{path}: invalid configuration\n{exc}") from exc
+
+
+def load_feature_config(config_dir: Path = DEFAULT_CONFIG_DIR) -> FeatureConfig:
+    """Load ``features.yaml`` (DOC-03 §5.1) from ``config_dir``."""
+    return load_model(FeatureConfig, config_dir / "features.yaml")
 
 
 def config_hash(*models: BaseModel) -> str:

@@ -16,8 +16,8 @@ from house_price.eda.register import PROPERTIES
 from house_price.eda.runner import EXIT_ADR_DISCREPANCY, main, run_analyses
 from tests.conftest import CONFIG_DIR, REPO_ROOT, SampleEnv, make_env
 
-# Every DOC-02 deliverable M3 must produce (E-27 to E-30 belong to M4/M7).
-REQUIRED_IDS = [f"E-{n:02d}" for n in [*range(1, 27), *range(31, 37)]]
+# Every DOC-02 deliverable produced by M3 and M4 (E-30 belongs to M7).
+REQUIRED_IDS = [f"E-{n:02d}" for n in [*range(1, 30), *range(31, 37)]]
 
 
 @dataclass(frozen=True)
@@ -118,7 +118,9 @@ def test_register_covers_every_documented_property(eda_run: EDARun) -> None:
 def test_questions_answered_except_q17(eda_run: EDARun) -> None:
     answers = eda_run.result.answers.set_index("question")
     assert list(answers.index) == [f"Q{n}" for n in range(1, 20)]
-    assert answers.loc["Q17", "answer"].startswith("Open")
+    q17 = answers.loc["Q17", "answer"]
+    assert q17.startswith("Partly answered in M4")  # M4 evidence, not a retention decision
+    assert "E-30" in q17 and "M7" in q17
     assert all(answers.loc[q, "answer"] for q in answers.index)
 
 

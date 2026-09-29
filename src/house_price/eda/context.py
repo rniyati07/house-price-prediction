@@ -13,7 +13,14 @@ from pathlib import Path
 import numpy as np
 import pandas as pd
 
-from house_price.config import DEFAULT_CONFIG_DIR, ProjectConfig, SchemaConfig, load_project_config
+from house_price.config import (
+    DEFAULT_CONFIG_DIR,
+    FeatureConfig,
+    ProjectConfig,
+    SchemaConfig,
+    load_feature_config,
+    load_project_config,
+)
 from house_price.data.errors import DataError
 from house_price.data.load import load_raw, sha256_file
 from house_price.data.scope import ScopeRecord, apply_scope_rule
@@ -76,6 +83,7 @@ class EDAContext:
     scope_record: ScopeRecord
     manifest: SplitManifest
     raw_sha256: str
+    features: FeatureConfig
     tables_dir: Path
     figures_dir: Path
 
@@ -111,7 +119,8 @@ class EDAContext:
         directory, so notebooks can run from ``notebooks/``).
         """
         root = (root or find_project_root(Path.cwd())).resolve()
-        config = load_project_config(config_dir or root / DEFAULT_CONFIG_DIR, root)
+        config_dir = config_dir or root / DEFAULT_CONFIG_DIR
+        config = load_project_config(config_dir, root)
         if not config.manifest_path.is_file():
             raise EDAError(
                 f"split manifest not found at {config.manifest_path}; "
@@ -127,6 +136,7 @@ class EDAContext:
             scope_record=record,
             manifest=split.manifest,
             raw_sha256=sha256_file(config.raw_path),
+            features=load_feature_config(config_dir),
             tables_dir=tables_dir or root / TABLES_DIR,
             figures_dir=figures_dir or root / FIGURES_DIR,
         )

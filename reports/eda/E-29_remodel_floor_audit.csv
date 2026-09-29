@@ -1,0 +1,13 @@
+metric,value,note
+development_rows,2340,rows analysed
+remodel_year_below_floor,0,YearRemodAdd < 1950 (0 confirms the floor)
+remodel_year_at_floor,297,YearRemodAdd = 1950
+floor_rows_built_before_1950,279,"remodel year may be the recording floor, not a real remodel"
+floor_rows_built_in_1950,18,genuinely unremodeled 1950 houses
+houses_built_before_1950,516,
+pct_pre1950_houses_at_floor,54.1,share of pre-1950 houses whose remodel year is 1950
+floor_rows_flagged_remodeled,279,IsRemodeled = 1 because 1950 != YearBuilt; may not be a real remodel
+pct_of_remodeled_flags_from_floor,25.6,share of all IsRemodeled = 1 rows that sit at the floor
+floor_rows_remodage_min,56,RemodAge = YrSold - 1950 for every floor row
+floor_rows_remodage_max,60,
+floor_rows_median_houseage_minus_remodage,25,years by which RemodAge understates HouseAge at the floor

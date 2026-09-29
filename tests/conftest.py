@@ -14,15 +14,24 @@ import shutil
 from dataclasses import dataclass
 from pathlib import Path
 
+import pandas as pd
 import pytest
 import yaml
 
-from house_price.config import ProjectConfig, load_project_config
-from house_price.data.load import sha256_file
+from house_price.config import (
+    FeatureConfig,
+    ProjectConfig,
+    SchemaConfig,
+    load_feature_config,
+    load_project_config,
+)
+from house_price.data.load import cast_to_schema, load_raw, read_text_csv, sha256_file
+from house_price.data.schema import select_model_input
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
 CONFIG_DIR = REPO_ROOT / "configs"
 FIXTURE_CSV = REPO_ROOT / "tests" / "fixtures" / "raw_sample.csv"
+FEATURE_ROWS_CSV = REPO_ROOT / "tests" / "fixtures" / "feature_rows.csv"
 REAL_RAW = REPO_ROOT / "data" / "raw" / "train.csv"
 
 FIXTURE_ROWS = 102
@@ -71,7 +80,7 @@ def make_env(
     config_dir.mkdir(parents=True, exist_ok=True)
     raw_path.parent.mkdir(parents=True, exist_ok=True)
     raw_path.write_bytes(FIXTURE_CSV.read_bytes() if raw_bytes is None else raw_bytes)
-    for name in ("schema.yaml", "validation.yaml"):
+    for name in ("schema.yaml", "validation.yaml", "features.yaml"):
         shutil.copyfile(CONFIG_DIR / name, config_dir / name)
 
     data = yaml.safe_load((CONFIG_DIR / "data.yaml").read_text(encoding="utf-8"))
@@ -89,6 +98,41 @@ def sample_env(tmp_path: Path) -> SampleEnv:
 @pytest.fixture
 def sample_config(sample_env: SampleEnv) -> ProjectConfig:
     return sample_env.load()
+
+
+@dataclass(frozen=True)
+class ModelData:
+    """Validated fixture rows as the pipeline sees them (DN-11): 77 inputs plus the target."""
+
+    X: pd.DataFrame
+    y: pd.Series
+    schema: SchemaConfig
+    features: FeatureConfig
+
+
+@pytest.fixture(scope="session")
+def model_data(tmp_path_factory: pytest.TempPathFactory) -> ModelData:
+    config = make_env(tmp_path_factory.mktemp("model_data")).load()
+    raw = load_raw(config)
+    return ModelData(
+        X=select_model_input(raw, config.schema),
+        y=raw[config.schema.target],
+        schema=config.schema,
+        features=load_feature_config(CONFIG_DIR),
+    )
+
+
+@pytest.fixture
+def feature_config() -> FeatureConfig:
+    return load_feature_config(CONFIG_DIR)
+
+
+@pytest.fixture
+def feature_rows() -> pd.DataFrame:
+    """The hand-built M4 fixture, parsed and cast exactly like the raw file (DN-18)."""
+    schema = load_project_config(CONFIG_DIR, REPO_ROOT).schema
+    text = read_text_csv(FEATURE_ROWS_CSV, ["NA", ""])
+    return cast_to_schema(text, schema).frame.set_index("Id", drop=False)
 
 
 @pytest.fixture(scope="session")

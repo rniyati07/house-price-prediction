@@ -1,0 +1,95 @@
+# Feature configuration (DOC-03 §5.1, §5.6, §6). Loaded into house_price.config.FeatureConfig.
+#
+# Which features exist and how columns are grouped live here; the engineered-feature
+# formulas live in code (src/house_price/features/engineer.py, DOC-03 §6.4).
+
+# Layer 1 semantic filler (ADR-05, FR-011, DOC-03 §6.2): the data dictionary defines NA in
+# these columns as "feature absent". The filler is stateless and applies by column.
+semantic_fill:
+  # NA -> "None"
+  categorical_none: [
+    "PoolQC", "Alley", "Fence", "FireplaceQu", "MiscFeature",
+    "GarageType", "GarageFinish", "GarageQual", "GarageCond",
+    "BsmtQual", "BsmtCond", "BsmtExposure", "BsmtFinType1", "BsmtFinType2",
+    "MasVnrType",
+  ]
+  # NA -> 0
+  numeric_zero: [
+    "GarageArea", "GarageCars",
+    "BsmtFinSF1", "BsmtFinSF2", "BsmtUnfSF", "TotalBsmtSF", "BsmtFullBath", "BsmtHalfBath",
+    "MasVnrArea",
+  ]
+
+# Ordinal map (ADR-07, FR-013, DN-13): the ten Po-Ex quality/condition scales (DOC-02 §8.6).
+# Other ordered-looking columns (BsmtExposure, BsmtFinType1/2, GarageFinish, Functional) use
+# different scales and stay nominal. A value outside the map becomes missing.
+ordinal:
+  columns: [
+    "ExterQual", "ExterCond", "BsmtQual", "BsmtCond", "HeatingQC",
+    "KitchenQual", "FireplaceQu", "GarageQual", "GarageCond", "PoolQC",
+  ]
+  mapping: {"None": 0, "Po": 1, "Fa": 2, "TA": 3, "Gd": 4, "Ex": 5}
+
+# Numeric codes treated as categories (DN-12): cast to string by the feature engineer.
+categorical_codes: ["MSSubClass"]
+
+# The 12 approved engineered features (ADR-07, FR-012, DOC-03 §6.4).
+engineered: [
+  "TotalSF", "TotalBath", "HouseAge", "RemodAge", "IsRemodeled", "TotalPorchSF",
+  "HasPool", "HasGarage", "HasBsmt", "HasFireplace", "Has2ndFlr", "GarageAge",
+]
+
+# Initial column groups per preprocessing branch (DOC-03 §5.6, §7.5). Together the four
+# groups cover every FeatureEngineer output column: the 77 model inputs plus the 12
+# engineered features. Both branches start identical; M7 records per-branch ablation
+# outcomes (DOC-03 §6.6).
+linear:
+  numeric: [
+    "LotFrontage", "LotArea", "OverallQual", "OverallCond", "YearBuilt", "YearRemodAdd",
+    "MasVnrArea", "BsmtFinSF1", "BsmtFinSF2", "BsmtUnfSF", "TotalBsmtSF", "1stFlrSF",
+    "2ndFlrSF", "LowQualFinSF", "GrLivArea", "BsmtFullBath", "BsmtHalfBath", "FullBath",
+    "HalfBath", "BedroomAbvGr", "KitchenAbvGr", "TotRmsAbvGrd", "Fireplaces", "GarageCars",
+    "GarageArea", "WoodDeckSF", "OpenPorchSF", "EnclosedPorch", "3SsnPorch", "ScreenPorch",
+    "PoolArea", "MiscVal", "MoSold", "YrSold",
+    "TotalSF", "TotalBath", "HouseAge", "RemodAge", "IsRemodeled", "TotalPorchSF",
+    "HasPool", "HasGarage", "HasBsmt", "HasFireplace", "Has2ndFlr", "GarageAge",
+  ]
+  ordinal: [
+    "ExterQual", "ExterCond", "BsmtQual", "BsmtCond", "HeatingQC",
+    "KitchenQual", "FireplaceQu", "GarageQual", "GarageCond", "PoolQC",
+  ]
+  nominal: [
+    "MSSubClass", "MSZoning", "Street", "Alley", "LotShape", "LandContour", "Utilities",
+    "LotConfig", "LandSlope", "Neighborhood", "Condition1", "Condition2", "BldgType",
+    "HouseStyle", "RoofStyle", "RoofMatl", "Exterior1st", "Exterior2nd", "MasVnrType",
+    "Foundation", "BsmtExposure", "BsmtFinType1", "BsmtFinType2", "Heating", "CentralAir",
+    "Electrical", "Functional", "GarageType", "GarageFinish", "PavedDrive", "Fence",
+    "MiscFeature",
+  ]
+  # GarageYrBlt is replaced by HasGarage and GarageAge (ADR-05).
+  dropped: ["GarageYrBlt"]
+
+tree:
+  numeric: [
+    "LotFrontage", "LotArea", "OverallQual", "OverallCond", "YearBuilt", "YearRemodAdd",
+    "MasVnrArea", "BsmtFinSF1", "BsmtFinSF2", "BsmtUnfSF", "TotalBsmtSF", "1stFlrSF",
+    "2ndFlrSF", "LowQualFinSF", "GrLivArea", "BsmtFullBath", "BsmtHalfBath", "FullBath",
+    "HalfBath", "BedroomAbvGr", "KitchenAbvGr", "TotRmsAbvGrd", "Fireplaces", "GarageCars",
+    "GarageArea", "WoodDeckSF", "OpenPorchSF", "EnclosedPorch", "3SsnPorch", "ScreenPorch",
+    "PoolArea", "MiscVal", "MoSold", "YrSold",
+    "TotalSF", "TotalBath", "HouseAge", "RemodAge", "IsRemodeled", "TotalPorchSF",
+    "HasPool", "HasGarage", "HasBsmt", "HasFireplace", "Has2ndFlr", "GarageAge",
+  ]
+  ordinal: [
+    "ExterQual", "ExterCond", "BsmtQual", "BsmtCond", "HeatingQC",
+    "KitchenQual", "FireplaceQu", "GarageQual", "GarageCond", "PoolQC",
+  ]
+  nominal: [
+    "MSSubClass", "MSZoning", "Street", "Alley", "LotShape", "LandContour", "Utilities",
+    "LotConfig", "LandSlope", "Neighborhood", "Condition1", "Condition2", "BldgType",
+    "HouseStyle", "RoofStyle", "RoofMatl", "Exterior1st", "Exterior2nd", "MasVnrType",
+    "Foundation", "BsmtExposure", "BsmtFinType1", "BsmtFinType2", "Heating", "CentralAir",
+    "Electrical", "Functional", "GarageType", "GarageFinish", "PavedDrive", "Fence",
+    "MiscFeature",
+  ]
+  dropped: ["GarageYrBlt"]

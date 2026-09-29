@@ -16,7 +16,8 @@ from tests.conftest import REPO_ROOT
 
 NOTEBOOK_DIR = REPO_ROOT / "notebooks"
 EXPECTED = ["01_data_integrity", "02_target", "03_missing_values", "04_numeric",
-            "05_categorical", "06_outliers_scope", "08_leakage_time", "99_eda_report"]  # fmt: skip
+            "05_categorical", "06_outliers_scope", "07_feature_engineering", "08_leakage_time",
+            "99_eda_report"]  # fmt: skip
 # E-08 (split balance) is the permitted exception; 99 only reports the resulting split sizes.
 HOLDOUT_MENTION_ALLOWED = {"02_target", "99_eda_report"}
 HOLDOUT_PATH = re.compile(r"holdout\.csv|holdout_path")
@@ -35,7 +36,7 @@ def _code(stem: str) -> str:
 
 def test_expected_notebooks_exist() -> None:
     present = sorted(p.stem for p in NOTEBOOK_DIR.glob("*.ipynb"))
-    assert present == EXPECTED  # 07 is reserved for M4
+    assert present == EXPECTED
 
 
 @pytest.mark.parametrize("stem", EXPECTED)

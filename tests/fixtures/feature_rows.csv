@@ -1,0 +1,10 @@
+Id,MSSubClass,1stFlrSF,2ndFlrSF,TotalBsmtSF,BsmtFinSF1,BsmtFinSF2,BsmtUnfSF,BsmtFullBath,BsmtHalfBath,FullBath,HalfBath,YearBuilt,YearRemodAdd,YrSold,GarageYrBlt,GarageType,GarageFinish,GarageQual,GarageCond,GarageCars,GarageArea,BsmtQual,BsmtCond,BsmtExposure,BsmtFinType1,BsmtFinType2,PoolQC,PoolArea,Fireplaces,FireplaceQu,Alley,Fence,MiscFeature,MasVnrType,MasVnrArea,ExterQual,ExterCond,HeatingQC,KitchenQual,Functional,OpenPorchSF,EnclosedPorch,3SsnPorch,ScreenPorch,WoodDeckSF
+1,060,1000,800,900,500,0,400,1,0,2,1,2000,2005,2008,2000,Attchd,RFn,TA,TA,2,480,Gd,TA,No,GLQ,Unf,NA,0,1,Gd,NA,NA,NA,BrkFace,120,Gd,TA,Ex,Gd,Typ,40,0,0,0,100
+2,020,900,0,0,0,0,0,0,0,1,0,1950,1950,2010,,NA,NA,NA,NA,0,0,NA,NA,NA,NA,NA,NA,0,0,NA,Grvl,MnPrv,Shed,,,TA,Fa,Po,TA,Min1,0,50,0,0,0
+3,120,1500,0,1500,1000,0,500,1,1,2,0,2006,2006,2007,2006,BuiltIn,Fin,Gd,Gd,3,700,Ex,Gd,Gd,GLQ,Unf,Ex,500,2,Ex,NA,GdPrv,NA,Stone,300,Ex,Gd,Ex,Ex,Typ,60,0,100,120,200
+4,050,800,400,700,0,0,700,0,0,1,1,1925,1950,2009,,Detchd,,,,1,360,TA,TA,Mn,Unf,Unf,NA,0,0,NA,Pave,NA,NA,None,0,Fa,Po,Fa,Fa,Mod,0,0,0,0,0
+5,020,1200,0,1200,800,0,400,0,0,2,0,2008,2009,2007,2009,Attchd,Fin,TA,TA,2,500,Gd,TA,Av,ALQ,Unf,NA,0,1,TA,NA,NA,NA,BrkFace,150,Gd,TA,Gd,Gd,Typ,30,0,0,0,0
+6,080,1100,0,900,400,0,500,1,0,1,0,1975,1990,2008,1975,Attchd,Unf,TA,TA,1,300,Gd,TA,,BLQ,Unf,NA,0,0,NA,NA,NA,NA,None,0,TA,TA,TA,TA,Typ,0,0,0,0,0
+7,060,1000,900,1100,600,479,21,0,1,2,1,1995,1995,2006,1995,Attchd,RFn,TA,TA,2,550,Gd,Gd,No,GLQ,,NA,0,1,Po,NA,NA,NA,BrkFace,200,Gd,Ex,Ex,Gd,Typ,50,0,0,0,120
+8,190,896,0,,,,,,,1,0,1946,1950,2008,1946,Detchd,Unf,Fa,Po,1,280,NA,NA,NA,NA,NA,NA,0,0,NA,NA,NA,NA,None,0,TA,TA,TA,TA,Typ,0,0,0,0,0
+9,030,1000,0,800,0,0,800,0,0,1,0,1923,2000,2007,,Detchd,,,,,,TA,TA,No,Unf,Unf,NA,0,0,NA,NA,NA,NA,None,0,TA,TA,Gd,TA,Typ,0,0,0,0,0

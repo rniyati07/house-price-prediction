@@ -15,6 +15,7 @@ from house_price.config import ConfigError
 from house_price.data.errors import DataError
 from house_price.eda import (
     categorical,
+    engineered,
     integrity,
     leakage_time,
     missing,
@@ -26,12 +27,12 @@ from house_price.eda import (
 from house_price.eda.context import EDAContext
 from house_price.eda.outputs import Outputs
 
-ANALYSES = (integrity, target, missing, numeric, categorical, outliers, leakage_time)
+ANALYSES = (integrity, target, missing, numeric, categorical, outliers, engineered, leakage_time)
 EXIT_ADR_DISCREPANCY = 2
 
 
 def run_analyses(ctx: EDAContext) -> Outputs:
-    """Compute and save E-01 to E-26 and E-31 to E-34."""
+    """Compute and save E-01 to E-29 and E-31 to E-34."""
     outputs = Outputs()
     for module in ANALYSES:
         outputs.update(module.run(ctx))
