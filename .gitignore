@@ -22,3 +22,6 @@ models/*.joblib
 mlruns/
 
 .env
+
+# Local run records (house_price.results): execution history, like mlruns/.
+results/

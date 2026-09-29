@@ -23,12 +23,18 @@ from sklearn.pipeline import Pipeline
 from sklearn.preprocessing import OneHotEncoder, OrdinalEncoder, PowerTransformer, StandardScaler
 
 from house_price.config import BranchGroups, FeatureConfig
+from house_price.data import split
+from house_price.data.load import load_raw
 from house_price.data.schema import model_input_columns, select_model_input
+from house_price.data.scope import apply_scope_rule
+from house_price.data.split import create_or_load_split
 from house_price.features.engineer import FeatureEngineer
 from house_price.features.semantic import SemanticNAFiller
 from house_price.pipelines import build_column_transformer, build_pipeline, check_group_coverage
 from house_price.pipelines.branches import Branch, feature_engineer_output
-from tests.conftest import CONFIG_DIR, REPO_ROOT, ModelData
+from house_price.pipelines.check import main as check_main
+from house_price.results import read_index, read_result
+from tests.conftest import CONFIG_DIR, REPO_ROOT, ModelData, make_env
 
 EXCLUDED = {"Id", "PID", "SalePrice", "SaleType", "SaleCondition"}
 TOLERANCE = 1e-6  # IN-08
@@ -382,3 +388,40 @@ def test_build_column_transformer_is_unfitted_and_pandas(model_data: ModelData) 
         assert [name for name, _, _ in ct.transformers] == ["numeric", "ordinal", "nominal"]
     with pytest.raises(ValueError, match="unknown branch"):
         build_column_transformer("forest", model_data.features)  # type: ignore[arg-type]
+
+
+# ------------------------------------------------------- M5 preprocessing check record
+
+
+def test_preprocessing_check_record_matches_the_fitted_pipeline(
+    tmp_path: Path, model_data: ModelData
+) -> None:
+    """``python -m house_price.pipelines`` records what the real pipeline produces on the
+    development set; compared here with a full pipeline fitted independently."""
+    env = make_env(tmp_path)
+    assert split.main(env.cli_args()) == 0
+    assert check_main(env.cli_args()) == 0
+    (line,) = read_index(tmp_path / "results")
+    record = read_result(tmp_path / "results" / line["result"])
+    assert record["milestone"] == "M5" and record["status"] == "succeeded"
+    assert record["params"]["estimator_fitted"] is False
+
+    config = env.load()
+    in_scope, scope = apply_scope_rule(load_raw(config), config.data.scope, "Id")
+    dev = create_or_load_split(in_scope, scope, config).dev
+    X, y = select_model_input(dev, model_data.schema), dev["SalePrice"]
+    for branch in ("linear", "tree"):
+        model = build_pipeline(Ridge(), branch, model_data.features, model_data.schema).fit(X, y)
+        names = list(_ct(model).get_feature_names_out())
+        metrics = record["metrics"]
+        assert metrics[f"{branch}.n_rows"] == len(dev)
+        assert metrics[f"{branch}.n_inputs"] == len(model_input_columns(model_data.schema)) == 77
+        assert metrics[f"{branch}.n_output"] == len(names)
+        for group in ("numeric", "ordinal", "nominal"):
+            expected = sum(n.startswith(f"{group}__") for n in names)
+            assert metrics[f"{branch}.output.{group}"] == expected
+        details = record["findings"][branch]
+        assert details["indicators"] == [n for n in names if "missingindicator_" in n]
+        assert details["target_func"] == "log1p" and details["target_inverse_func"] == "expm1"
+        assert details["output_has_missing"] is False
+    assert record["lineage"]["data_sha256"] == config.data.raw_sha256

@@ -5,15 +5,19 @@ from __future__ import annotations
 import re
 from dataclasses import dataclass
 from pathlib import Path
+from typing import Any
 
 import pandas as pd
 import pytest
 
+from house_price.config import load_feature_config
 from house_price.data import split
+from house_price.data.load import sha256_file
 from house_price.eda import EDAContext, report
 from house_price.eda.context import EDAError
 from house_price.eda.register import PROPERTIES
 from house_price.eda.runner import EXIT_ADR_DISCREPANCY, main, run_analyses
+from house_price.results import read_index, read_result
 from tests.conftest import CONFIG_DIR, REPO_ROOT, SampleEnv, make_env
 
 # Every DOC-02 deliverable produced by M3 and M4 (E-30 belongs to M7).
@@ -180,6 +184,117 @@ def test_missing_values_are_classified(eda_run: EDARun) -> None:
 def test_scope_review_lists_the_out_of_scope_homes(eda_run: EDARun) -> None:
     table = pd.read_csv(eda_run.ctx.tables_dir / "E-25_out_of_scope_homes.csv")
     assert sorted(table["Id"]) == [1499, 1768]
+
+
+# ---------------------------------------------------------------- run records
+
+
+@dataclass(frozen=True)
+class RecordedRun:
+    env: SampleEnv
+    out: Path
+    code: int
+    m3: dict[str, Any]
+    m4: dict[str, Any]
+
+
+def _records(results: Path) -> tuple[dict[str, Any], dict[str, Any]]:
+    index = read_index(results)
+    latest = {line["milestone"]: line for line in index}
+    return (read_result(results / latest["M3"]["result"]),
+            read_result(results / latest["M4"]["result"]))  # fmt: skip
+
+
+@pytest.fixture(scope="module")
+def recorded(
+    sample_env_with_split: SampleEnv, tmp_path_factory: pytest.TempPathFactory
+) -> RecordedRun:
+    out = tmp_path_factory.mktemp("recorded")
+    code = main([*sample_env_with_split.cli_args(), "--tables-dir", str(out / "tables"),
+                 "--figures-dir", str(out / "figures"), "--results-dir", str(out / "results")])  # fmt: skip
+    return RecordedRun(sample_env_with_split, out, code, *_records(out / "results"))
+
+
+def test_full_run_writes_m3_and_m4_records(recorded: RecordedRun) -> None:
+    m3, m4 = recorded.m3, recorded.m4
+    assert recorded.code == EXIT_ADR_DISCREPANCY  # the 100-row fixture contradicts 2,925
+    assert m3["status"] == "failed" and "P-04" in m3["error"]["message"]
+    assert m4["status"] == "succeeded"
+    assert m3["findings"]["execution.shared_with"] == {"M4": m4["run_id"]}
+    assert m3["params"]["mode"] == m4["params"]["mode"] == "full"
+    assert m3["command"]["entry_point"] == "python -m house_price.eda"
+
+
+def test_m3_record_matches_the_saved_tables(recorded: RecordedRun) -> None:
+    tables = recorded.out / "tables"
+    m3 = recorded.m3
+    register = pd.read_csv(tables / "E-35_confirmation_register.csv")
+    target = pd.read_csv(tables / "E-05_target_statistics.csv").set_index("scale")
+    assert m3["metrics"]["register.properties"] == len(register)
+    assert m3["metrics"]["register.confirmed"] == (register["status"] == "confirmed").sum()
+    assert m3["metrics"]["dev_rows"] == target.loc["dollars", "n"]
+    assert m3["metrics"]["target.log1p.std"] == target.loc["log1p", "std"]
+    assert m3["findings"]["scope.out_of_scope_ids"] == [1499, 1768]
+    leakage = pd.read_csv(tables / "E-31_leakage_review.csv")
+    excluded = leakage.loc[leakage["decision"] == "excluded", "column"]
+    assert m3["findings"]["leakage.excluded_columns"] == list(excluded)
+    assert "Q17" in m3["findings"]["questions.partly_answered"]
+
+
+def test_m4_record_matches_the_saved_tables(recorded: RecordedRun) -> None:
+    tables = recorded.out / "tables"
+    m4 = recorded.m4
+    e27 = pd.read_csv(tables / "E-27_engineered_features.csv").set_index("feature")
+    features = load_feature_config(CONFIG_DIR)
+    recorded_features = m4["findings"]["engineered.features"]
+    assert list(recorded_features) == list(e27.index) == features.engineered
+    for name, values in recorded_features.items():
+        assert values["spearman"] == e27.loc[name, "spearman"]
+        assert values["hypothesis_supported"] == bool(e27.loc[name, "hypothesis_supported"])
+    assert m4["metrics"]["engineered.hypotheses_supported"] == e27["hypothesis_supported"].sum()
+    assert m4["params"]["engineered"] == features.engineered
+    assert m4["params"]["ordinal.mapping"] == features.ordinal.mapping
+    q17 = pd.read_csv(tables / "E-35_question_answers.csv").set_index("question")
+    assert m4["findings"]["q17_answer"] == q17.loc["Q17", "answer"]
+
+
+def test_records_register_deliverables_by_hash(recorded: RecordedRun) -> None:
+    root = recorded.env.root
+    for record in (recorded.m3, recorded.m4):
+        assert record["artifacts"]
+        for artifact in record["artifacts"]:
+            path = Path(artifact["path"])
+            path = path if path.is_absolute() else root / path
+            assert sha256_file(path) == artifact["sha256"]
+    m4_names = {Path(a["path"]).name for a in recorded.m4["artifacts"]}
+    assert "E-27_engineered_features.csv" in m4_names
+    assert "E-28_engineered_flags.png" in m4_names
+    assert not any(Path(a["path"]).name.startswith("E-27") for a in recorded.m3["artifacts"])
+
+
+def test_record_only_reads_saved_deliverables_without_rerunning(recorded: RecordedRun) -> None:
+    files = sorted([*(recorded.out / "tables").iterdir(), *(recorded.out / "figures").iterdir()])
+    before = {p: (p.stat().st_mtime_ns, p.read_bytes()) for p in files}
+    results = recorded.out / "results_record_only"
+    code = main([*recorded.env.cli_args(), "--tables-dir", str(recorded.out / "tables"),
+                 "--figures-dir", str(recorded.out / "figures"),
+                 "--results-dir", str(results), "--record-only"])  # fmt: skip
+    assert code == 0
+    assert {p: (p.stat().st_mtime_ns, p.read_bytes()) for p in files} == before  # untouched
+    m3, m4 = _records(results)
+    assert m3["status"] == m4["status"] == "succeeded"
+    assert m3["params"]["mode"] == "record-only"
+    assert m3["metrics"] == recorded.m3["metrics"]
+    assert m4["findings"]["engineered.features"] == recorded.m4["findings"]["engineered.features"]
+
+
+def test_record_only_without_saved_tables_is_a_recorded_failure(tmp_path: Path) -> None:
+    env = make_env(tmp_path)
+    code = main([*env.cli_args(), "--tables-dir", str(tmp_path / "none"), "--record-only"])
+    assert code == 1
+    index = read_index(tmp_path / "results")
+    assert [line["status"] for line in index] == ["failed", "failed"]
+    assert "missing" in read_result(tmp_path / "results" / index[0]["result"])["error"]["message"]
 
 
 # -------------------------------------------------------------- real dataset

@@ -16,6 +16,7 @@ from house_price.data import split
 from house_price.data.load import sha256_file
 from house_price.models.registry import PASSTHROUGH, baseline_candidates
 from house_price.models.train import TrainError, TrainResult, run_train
+from house_price.results import read_index, read_result
 from house_price.tracking import (
     EXPERIMENTS,
     STANDARD_TAGS,
@@ -165,6 +166,51 @@ def test_baseline_results_are_plausible(trained: tuple[SampleEnv, TrainResult, s
     assert heuristic.mean < dummy.mean - dummy.se
 
 
+def test_m6_record_summarizes_and_links_the_mlflow_runs(
+    trained: tuple[SampleEnv, TrainResult, str],
+) -> None:
+    """The local record uses pipeline_run_id as run_id and agrees with MLflow exactly."""
+    env, result, uri = trained
+    assert result.result_path is not None
+    record = read_result(result.result_path)
+    assert record["milestone"] == "M6" and record["status"] == "succeeded"
+    assert record["run_id"] == result.pipeline_run_id
+    assert result.result_path.parent.parent == env.root / "results" / "M6"
+    mlflow = record["findings"]["mlflow"]
+    assert mlflow["tracking_uri"] == uri and mlflow["experiment"] == "hpp-baselines"
+    assert mlflow["runs"] == result.run_ids
+    for run in _runs(uri):
+        name, metrics, tags = run.data.tags["candidate"], run.data.metrics, run.data.tags
+        assert run.info.run_id == mlflow["runs"][name]
+        for key in ("cv_mean", "cv_se", "cv_mae", "cv_mape", "cv_r2"):
+            assert record["metrics"][f"{name}.{key}"] == pytest.approx(metrics[key], rel=1e-12)
+        assert tags["pipeline_run_id"] == record["run_id"]
+        assert tags["git_commit"] == record["git"]["commit"]
+        for key in ("data_sha256", "split_manifest_sha256", "config_hash"):
+            assert tags[key] == record["lineage"][key]
+    assert not any(key.split(".")[-1].startswith("fold_") for key in record["metrics"])
+    assert record["metrics"]["dev_log_price_sd"] == pytest.approx(result.dev_log_price_sd)
+    plausibility = record["findings"]["plausibility"]
+    dummy = result.results["dummy_median"]
+    assert plausibility["dummy_cv_mean_over_dev_log_price_sd"] == pytest.approx(
+        dummy.mean / result.dev_log_price_sd
+    )
+    assert plausibility["heuristic_beats_dummy_by_more_than_one_se"] is True
+    folds = next(a for a in record["artifacts"] if a["path"] == "artifacts/cv/folds.json")
+    assert folds["sha256"] == sha256_file(result.folds_path)
+    assert read_index(env.root / "results")[-1]["run_id"] == result.pipeline_run_id
+
+
+def test_a_failed_training_run_is_recorded(tmp_path: Path) -> None:
+    env = make_env(tmp_path)  # no split: training refuses to start
+    with pytest.raises(TrainError):
+        run_train(env.config_dir, env.root, (tmp_path / "mlruns").as_uri())
+    (line,) = read_index(tmp_path / "results")
+    record = read_result(tmp_path / "results" / line["result"])
+    assert line["milestone"] == "M6" and record["status"] == "failed"
+    assert record["error"]["type"] == "TrainError" and "never creates" in record["error"]["message"]
+
+
 def test_registry_holds_exactly_the_two_ineligible_baselines() -> None:
     candidates = baseline_candidates(load_models_config(CONFIG_DIR))
     assert [c.name for c in candidates] == ["dummy_median", "linear_2feat"]
@@ -189,4 +235,5 @@ def test_cli_train_runs_and_reports(tmp_path: Path, capsys: pytest.CaptureFixtur
     output = capsys.readouterr().out
     assert code == 0
     assert "dummy_median" in output and "linear_2feat" in output and "hpp-baselines" in output
+    assert "Run record:" in output and len(read_index(tmp_path / "results")) == 1
     assert cli_main([]) == 0  # no subcommand: help, exit 0

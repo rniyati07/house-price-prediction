@@ -20,7 +20,9 @@ def _train(args: argparse.Namespace) -> int:
     from house_price.tracking import TrackingError
 
     try:
-        result = run_train(args.config_dir, args.root, args.tracking_uri)
+        result = run_train(
+            args.config_dir, args.root, args.tracking_uri, args.results_dir, args.argv
+        )
     except (ConfigError, DataError, TrackingError) as exc:
         print(f"ERROR: {exc}", file=sys.stderr)
         return 1
@@ -35,6 +37,7 @@ def build_parser() -> argparse.ArgumentParser:
     train.add_argument("--config-dir", type=Path, default=None, help="default: <root>/configs")
     train.add_argument("--root", type=Path, default=None, help="project root (default: cwd)")
     train.add_argument("--tracking-uri", default=None, help="default: file store <root>/mlruns")
+    train.add_argument("--results-dir", type=Path, default=None, help="default: <root>/results")
     train.set_defaults(handler=_train)
     return parser
 
@@ -42,6 +45,7 @@ def build_parser() -> argparse.ArgumentParser:
 def main(argv: Sequence[str] | None = None) -> int:
     parser = build_parser()
     args = parser.parse_args(argv)
+    args.argv = list(sys.argv[1:] if argv is None else argv)
     if args.command is None:
         parser.print_help()
         return 0
