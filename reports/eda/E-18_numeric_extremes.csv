@@ -1,0 +1,11 @@
+feature,p99,n_above_p99,max,ids_above_p99,assessment
+GrLivArea,2862.93,24,3820,1498|2446|2667|2451|1307|1538|2195|2331|16|66|1773|2215|423|2571|2046|1765|161|1708|2337|1183|1573|1023|1834|2333,legitimate: within schema physical range; consistent with related columns
+LotArea,34389.87,24,215245,957|2116|2072|2767|315|1611|16|1403|2117|1638|2523|2894|1016|1498|505|1407|2279|1639|2309|1402|2765|2446|2274|2339,legitimate: within schema physical range; consistent with related columns
+LotFrontage,135.86,20,313,1266|2279|1639|496|2571|2322|2925|1631|2119|2690|17|1593|957|2259|467|729|1|19|2046|138,legitimate: within schema physical range; consistent with related columns
+TotalBsmtSF,2136,23,3206,445|1773|424|47|1638|433|1696|1064|380|457|1861|514|449|1057|448|45|1426|1614|1615|367|350|803|1698,within schema range; related-column flags: 445: basement_fintype2_missing_with_area
+1stFlrSF,2269.37,24,3820,1498|1773|1573|47|433|1696|380|350|2230|1861|457|514|1064|1057|449|2078|424|448|938|45|1855|1638|2259|1426,legitimate: within schema physical range; consistent with related columns
+BsmtFinSF1,1601.06,24,2288,433|1064|45|514|457|1426|449|350|367|1614|2462|1696|2523|424|564|1855|1057|264|39|969|1053|1861|1181|2923,legitimate: within schema physical range; consistent with related columns
+GarageArea,1017.72,24,1488,1259|427|2283|1426|1028|1558|863|1053|747|367|1060|819|1638|1853|1781|2385|498|1071|2098|526|2279|1692|1798|434,legitimate: within schema physical range; consistent with related columns
+MasVnrArea,764.62,24,1378,2446|1099|2259|102|1614|47|1183|2608|2337|499|448|500|2309|571|2270|2447|2401|423|1053|2397|1698|170|1125|1071,legitimate: within schema physical range; consistent with related columns
+WoodDeckSF,483,22,1424,2294|2451|2523|1489|2295|60|168|2119|2499|2736|874|1023|2850|2045|2386|505|749|16|1833|1074|1241|1407,legitimate: within schema physical range; consistent with related columns
+OpenPorchSF,276.44,24,570,2066|1289|727|1321|2244|2515|1498|1703|1343|1799|2660|1942|2542|1664|557|729|973|1263|1318|2688|700|1885|1023|246,legitimate: within schema physical range; consistent with related columns

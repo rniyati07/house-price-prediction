@@ -1,0 +1,17 @@
+name,description,severity,status,n_rows,ids
+garage_partially_recorded,A garage type is recorded but finish/quality/condition/year is missing (unknown values inside 'feature absent' columns).,warning,flagged,2,1357|2237
+garage_absent_with_area,No garage type recorded but garage area or car capacity is non-zero.,warning,clear,0,
+basement_exposure_missing_with_basement,Basement exists (BsmtQual recorded) but BsmtExposure is missing (DOC-02 §6.6).,warning,flagged,3,67|1797|2780
+basement_fintype2_missing_with_area,BsmtFinSF2 > 0 but BsmtFinType2 is missing (DOC-02 §6.6).,warning,flagged,1,445
+basement_areas_unrecorded,"Basement square-footage fields are missing (unknown, not zero).",warning,flagged,1,1342
+basement_absent_with_area,All basement categoricals missing but TotalBsmtSF is non-zero.,warning,clear,0,
+masvnr_type_area_missing_mismatch,MasVnrType and MasVnrArea are not missing together.,warning,clear,0,
+masvnr_none_with_area,MasVnrType is 'None' but MasVnrArea > 0.,warning,flagged,7,364|404|442|1862|1914|2004|2529
+pool_area_without_quality,PoolArea > 0 but PoolQC is missing.,warning,clear,0,
+electrical_unrecorded,Electrical system type is missing (genuinely unknown).,info,flagged,1,1578
+garage_built_after_sale,GarageYrBlt is later than YrSold (e.g. the documented 2207 typo).,warning,flagged,2,2181|2261
+house_built_after_sale,YearBuilt is later than YrSold (sold before completion).,info,flagged,1,2181
+remodel_before_built,YearRemodAdd is earlier than YearBuilt.,warning,flagged,1,851
+remodel_year_at_floor,"YearRemodAdd = 1950 for a house built before 1950 (recording floor, DOC-02 §10.5).",info,flagged,339,83|129|158|172|173|175|176|185|187|189|190|194|195|196|197|198|200|201|202|203|207|209|211|212|213|214|215|231|236|278|283|284|287|288|289|290|292|303|305|306|308|315|554|615|648|660|661|663|664|665|676|679|695|696|699|701|704|708|709|710|712|714|715|718|721|725|727|728|730|733|734|737|738|740|741|743|746|747|750|753|754|755|756|759|760|766|767|768|781|785|792|793|798|799|897|898|904|906|908|909|911|912|916|917|920|921|922|925|926|928|942|944|946|1220|1222|1223|1253|1255|1256|1257|1259|1274|1289|1290|1295|1297|1298|1300|1302|1303|1309|1311|1314|1320|1322|1329|1331|1332|1337|1339|1340|1342|1343|1346|1347|1348|1350|1353|1359|1360|1365|1366|1370|1374|1387|1405|1409|1414|1417|1418|1486|1514|1515|1517|1519|1520|1521|1523|1524|1528|1530|1531|1535|1537|1547|1550|1555|1556|1558|1559|1611|1902|1903|1904|1908|1909|1947|1952|1958|1959|1976|1977|1981|1985|1986|1987|1991|1993|1994|1996|2003|2008|2009|2011|2012|2013|2014|2017|2020|2021|2023|2024|2025|2028|2029|2030|2031|2032|2035|2037|2041|2042|2043|2044|2047|2071|2077|2088|2172|2187|2196|2198|2199|2201|2203|2206|2209|2210|2211|2214|2217|2218|2233|2234|2236|2238|2239|2240|2242|2338|2552|2554|2555|2563|2594|2595|2599|2601|2602|2603|2604|2621|2626|2637|2638|2643|2645|2646|2647|2650|2651|2653|2654|2655|2657|2658|2659|2662|2663|2665|2666|2668|2670|2671|2672|2674|2675|2676|2677|2678|2679|2680|2681|2684|2685|2686|2690|2691|2693|2694|2696|2698|2703|2704|2723|2734|2737|2746|2834|2835|2836|2838|2841|2842|2843|2848|2849|2851|2852|2853|2854|2855|2856|2857|2859|2860|2861|2862|2864|2865|2873|2874|2875|2876|2877|2879|2880|2881|2883
+grlivarea_components_differ,GrLivArea differs from 1stFlrSF + 2ndFlrSF + LowQualFinSF.,warning,clear,0,
+total_bsmt_components_differ,TotalBsmtSF differs from BsmtFinSF1 + BsmtFinSF2 + BsmtUnfSF.,warning,clear,0,

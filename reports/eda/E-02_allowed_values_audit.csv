@@ -1,0 +1,45 @@
+column,n_allowed,n_observed,not_allowed,allowed_unobserved,note
+MSSubClass,16,16,,,"Dwelling-class code, stored zero-padded in the file (e.g. 020); a code, not a quantity."
+MSZoning,11,7,,A|C|I|RP,"Includes the file's spellings that differ from the data dictionary: ""A (agr)"", ""C (all)"", ""I (all)""."
+Street,2,2,,,
+Alley,2,2,,,
+LotShape,4,4,,,
+LandContour,4,4,,,
+Utilities,4,3,,ELO,
+LotConfig,5,5,,,
+LandSlope,3,3,,,
+Neighborhood,29,28,,Names,"Includes the file's spellings that differ from the data dictionary: ""NAmes""."
+Condition1,9,9,,,
+Condition2,9,8,,RRNe,
+BldgType,8,5,,2FmCon|Duplx|TwnhsI,"Includes the file's spellings that differ from the data dictionary: ""2fmCon"", ""Duplex"", ""Twnhs""."
+HouseStyle,8,8,,,
+RoofStyle,6,6,,,
+RoofMatl,8,8,,,
+Exterior1st,17,16,,Other,
+Exterior2nd,20,17,,BrkComm|CemntBd|WdShing,"Includes the file's spellings that differ from the data dictionary: ""Brk Cmn"", ""CmentBd"", ""Wd Shng""."
+MasVnrType,5,5,,,"The literal text ""None"" means no veneer and is a category, not missing (DOC-02 §6.5)."
+ExterQual,5,4,,Po,
+ExterCond,5,5,,,
+Foundation,6,6,,,
+BsmtQual,5,5,,,
+BsmtCond,5,5,,,
+BsmtExposure,4,4,,,
+BsmtFinType1,6,6,,,
+BsmtFinType2,6,6,,,
+Heating,6,6,,,
+HeatingQC,5,5,,,
+CentralAir,2,2,,,
+Electrical,5,5,,,
+KitchenQual,5,5,,,
+Functional,8,8,,,
+FireplaceQu,5,5,,,
+GarageType,6,6,,,
+GarageFinish,3,3,,,
+GarageQual,5,5,,,
+GarageCond,5,5,,,
+PavedDrive,3,3,,,
+PoolQC,4,4,,,
+Fence,4,4,,,
+MiscFeature,5,5,,,
+SaleType,11,10,,WD,"Includes the file's spellings that differ from the data dictionary: ""WD ""."
+SaleCondition,6,6,,,

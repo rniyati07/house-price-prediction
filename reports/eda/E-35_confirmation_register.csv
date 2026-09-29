@@ -1,0 +1,61 @@
+property_id,doc02_section,documented_property,evidence,rule,observed,status,adr_fixed
+P-01,§1.2,"Raw file has 2,930 rows and 82 columns",E-03,exact counts,2930 x 82,confirmed,False
+P-02,§1.2,79 features; identifiers Id and PID (unique); target SalePrice (> 0),"E-01, E-03",exact roles; uniqueness and positivity checks pass,"79 features; identifiers ['Id', 'PID'] (unique: True); target ['SalePrice'] (> 0: True)",confirmed,False
+P-03,"§1.2, §14.3",Sales run January 2006 to July 2010; 2010 covers January-July only,E-32,first month of 2006 is 1; last year is 2010 and ends in month 7,2006-1 to 2010-7,confirmed,False
+P-04,"§1.2, §9.2","The scope rule removes 5 homes (Ids 1499, 1761, 1768, 2181, 2182), leaving 2,925 rows","E-25, E-03",exact Ids and count,"5 removed (Ids [1499, 1761, 1768, 2181, 2182]); 2925 in scope",confirmed,True
+P-05,§1.2,"Development set 2,340 rows; holdout 585 rows (80/20)",E-08,exact counts,"development 2340, holdout 585",confirmed,True
+P-06,§1.3,The 79 features are 36 numeric and 43 text columns,E-01,exact counts,"79 features: 36 numeric, 43 text",confirmed,False
+P-07,"§1.4, §5.1","SalePrice ranges from $12,789 to $755,000",E-05,development-set range lies within the documented raw-file range (the documented extremes are in the holdout or out of scope),"$13,100 to $625,000 (development set)",confirmed,False
+P-08,"§1.4, §5.1","Median SalePrice about $160,000",E-05,within 10%,"160,000.00 (development set)",confirmed,False
+P-09,"§1.4, §5.1","Mean SalePrice about $180,800",E-05,within 10%,"180,574.36 (development set)",confirmed,False
+P-10,§5.1,SalePrice skewness about 1.7,E-05,within 20%,1.66 (development set),confirmed,False
+P-11,§5.1,SalePrice excess kurtosis about 5.1,E-05,within 20%,4.23 (development set),confirmed,False
+P-12,§5.1,Mean above median: right skew,E-05,mean > median,"mean $180,574 vs median $160,000",confirmed,False
+P-13,§5.3,log1p reduces skewness to about 0 (near symmetric),"E-05, E-06",|log1p skewness| < 0.25,skewness 1.66 -> 0.02,confirmed,False
+P-14,§5.2,Error spread grows with price on the raw scale and is much more constant on the log scale,E-07,dollar top/bottom decile SD ratio >= 1.5 and log max/min SD ratio below the dollar one,"dollar residual SD top/bottom decile ratio 2.80; max/min SD across deciles: dollars 3.77, log 1.59",confirmed,False
+P-15,"§2.2, §3.5","OverallQual and GrLivArea are the two strongest correlates of price, OverallQual first",E-15,ranks 1 and 2 by |Spearman|,"rank 1 OverallQual, rank 2 GrLivArea (|Spearman| with log price)",confirmed,False
+P-16,§3.5,OverallQual's effect is increasing and convex in dollars and closer to linear in log space,E-17,upper-half dollar steps larger than lower-half; log R² > dollar R² (levels with >= 10 rows),"linear-fit R² of median price by level: dollars 0.916, log 0.997; upper-half dollar steps larger: True",confirmed,False
+P-17,§3.5,OverallCond relates to price more weakly than OverallQual,E-15,|Spearman| of OverallCond < 0.3 and below OverallQual,"|Spearman| OverallCond 0.156, OverallQual 0.812",confirmed,False
+P-18,§3.1,Condition2 is almost always Norm,E-02,share >= 95%,Norm share 99.0% (raw file),confirmed,False
+P-19,"§3.2, §7.1",LotArea is heavily right-skewed,E-13,skewness > 2,skewness 12.90,confirmed,False
+P-20,"§3.2, §6.3",LotFrontage is missing in 490 rows (about 17%) and is genuinely unknown,E-09,exact count; classified unknown,"490 missing (16.7%), unknown",confirmed,False
+P-21,§3.2,Alley is mostly NA (no alley access),E-09,> 90% missing,93.2% missing,confirmed,False
+P-22,"§3.2, §8.3",Street is almost always paved (12 gravel streets),E-02,exact gravel count,12 gravel,confirmed,False
+P-23,§3.4,GrLivArea equals 1stFlrSF + 2ndFlrSF + LowQualFinSF,E-11,consistency rule clear,rule grlivarea_components_differ: clear,confirmed,False
+P-24,"§3.4, §7.3",GrLivArea and TotRmsAbvGrd are strongly correlated,E-16,|Pearson| >= 0.7,Pearson r = 0.810,confirmed,False
+P-25,"§3.6, §10.5",YearRemodAdd has a recording floor of 1950,"E-13, E-11",minimum is 1950 and pre-1950 houses sit at the floor,minimum 1950; 339 pre-1950 houses at 1950 (raw file),confirmed,False
+P-26,"§3.7, §6.6",79 houses without a basement have NA in every basement categorical and TotalBsmtSF = 0,"E-09, E-11",79 absent rows; no absent pattern with area,79 absent rows; basement_absent_with_area clear,confirmed,False
+P-27,"§3.8, §6.6","157 houses without a garage: garage categoricals and GarageYrBlt NA, GarageArea and GarageCars 0","E-09, E-11",157 absent GarageType rows; no absent pattern with area,"GarageType 157 missing, 157 absent; garage_absent_with_area clear",confirmed,False
+P-28,"§3.8, §7.3",GarageCars and GarageArea are strongly correlated,E-16,|Pearson| >= 0.7,Pearson r = 0.895,confirmed,False
+P-29,§3.9,RoofMatl is dominated by standard composite shingle,E-02,share >= 95%,CompShg share 98.5% (raw file),confirmed,False
+P-30,§3.9,Foundation acts as an age proxy: poured concrete is common in newer homes,E-19,PConc has the latest median YearBuilt among types with >= 10 rows,latest median YearBuilt: PConc (2002),confirmed,False
+P-31,"§3.10, §8.3",Utilities: all but three houses have all public utilities,E-02,exactly 3 non-AllPub,3 non-AllPub,confirmed,False
+P-32,§3.10,Heating is dominated by gas forced-air,E-02,share >= 95%,GasA share 98.5% (raw file),confirmed,False
+P-33,§3.10,Houses without central air tend to be cheaper,E-21,median log price N < Y,"median log price N 11.518, Y 12.026",confirmed,False
+P-34,"§3.10, §6.3",Electrical has a single genuinely unknown value,E-09,1 missing; classified unknown,"1 missing, unknown",confirmed,False
+P-35,"§3.11, §6.2","FireplaceQu is NA for 1,422 houses without a fireplace",E-09,"1,422 missing, all with Fireplaces = 0","1422 missing, 1422 with Fireplaces = 0",confirmed,False
+P-36,"§3.12, §7.1","Outdoor and amenity areas are zero-inflated (porches, 2ndFlrSF, MasVnrArea, PoolArea)",E-13,share of exact zeros >= 40% for each,"OpenPorchSF 45.2%, EnclosedPorch 84.2%, 3SsnPorch 98.7%, ScreenPorch 91.1%, 2ndFlrSF 57.4%, MasVnrArea 60.1%, PoolArea 99.6%",confirmed,False
+P-37,§3.12,Only 13 houses have a pool; PoolQC is about 99.6% NA,E-09,"2,917 missing (= 2,930 - 13), all with PoolArea = 0","2917 missing (99.56%), 2917 with PoolArea = 0",confirmed,False
+P-38,§3.13,MiscFeature is about 96% NA and MiscVal is almost always zero,"E-09, E-13",95-97% missing; MiscVal zero share >= 90%,MiscFeature 96.4% missing; MiscVal zero 96.5%,confirmed,False
+P-39,§6.2,Per-column missing counts of the feature-absent columns (§6.2 table),E-09,every count matches,all 17 counts match,confirmed,False
+P-40,§6.5,"MasVnrType has 23 missing values and 1,752 literal 'None'; default parsing would report 1,775 missing","E-04, E-02",exact counts,"explicit 23, default 1775, 'None' 1752",confirmed,False
+P-41,§6.6,"Basement anomalies: BsmtExposure missing with a basement (Ids 67, 1797, 2780); BsmtFinType2 missing with finished area (Id 445)",E-11,exact Ids,"basement_exposure_missing_with_basement: [67, 1797, 2780]; basement_fintype2_missing_with_area: [445]",confirmed,False
+P-42,§6.6,Related unrecorded rows: Id 1342 (all basement fields); Ids 1357 and 2237 (garage fields),E-11,exact Ids,"basement_areas_unrecorded: [1342]; garage_partially_recorded: [1357, 2237]",confirmed,False
+P-43,§6.6,MasVnrType and MasVnrArea are missing together,E-11,consistency rule clear,rule masvnr_type_area_missing_mismatch: clear,confirmed,False
+P-44,§7.1,"Strong right skew in LotArea, GrLivArea, MasVnrArea, MiscVal, PoolArea, LowQualFinSF, 3SsnPorch",E-13,skewness > 1 for each,"LotArea 12.9, GrLivArea 0.9, MasVnrArea 2.4, MiscVal 21.4, PoolArea 18.2, LowQualFinSF 12.8, 3SsnPorch 11.3",not confirmed,False
+P-45,§7.2,"Near-constant numeric features: PoolArea, 3SsnPorch, LowQualFinSF, MiscVal, KitchenAbvGr",E-13,top value share >= 90% for each,"PoolArea 99.6%, 3SsnPorch 98.7%, LowQualFinSF 98.6%, MiscVal 96.5%, KitchenAbvGr 95.1%",confirmed,False
+P-46,§7.3,"Strongest numeric correlates: OverallQual, GrLivArea, GarageCars, GarageArea, TotalBsmtSF, 1stFlrSF, FullBath, TotRmsAbvGrd, YearBuilt, YearRemodAdd",E-15,each ranks within the top 15 by |Spearman|,"OverallQual #1, GrLivArea #2, GarageCars #3, GarageArea #5, TotalBsmtSF #9, 1stFlrSF #10, FullBath #6, TotRmsAbvGrd #12, YearBuilt #4, YearRemodAdd #8",confirmed,False
+P-47,§7.3,TotalBsmtSF and 1stFlrSF are strongly correlated,E-16,|Pearson| >= 0.7,Pearson r = 0.787,confirmed,False
+P-48,§7.3,YearBuilt and GarageYrBlt are strongly correlated,E-16,|Pearson| >= 0.7,Pearson r = 0.833,confirmed,False
+P-49,§8.2,"Cardinality: Neighborhood 28, Exterior2nd 17, MSSubClass 16, Exterior1st 16, Condition1 9, SaleType 10, Condition2/HouseStyle/RoofMatl 8",E-02,exact level counts (raw file),"Neighborhood 28, Exterior2nd 17, MSSubClass 16, Exterior1st 16, Condition1 9, SaleType 10, Condition2 8, HouseStyle 8, RoofMatl 8",confirmed,False
+P-50,§8.2,Most other categoricals have between 2 and 7 levels,E-02,>= 75% of the other categoricals,34 of 35 other categoricals have 2-7 levels,confirmed,False
+P-51,§8.3,The smallest neighborhood has 1 sale,E-02,exact minimum,smallest: 1 sale(s),confirmed,False
+P-52,"§8.5, §3.1",Neighborhood levels have strongly different price levels,"E-22, E-21",median log price range across neighborhoods >= 0.5,range 1.30 log units,confirmed,False
+P-53,§8.6,"Quality scales (ExterQual, KitchenQual, BsmtQual) rise clearly with price",E-23,monotonic across levels with >= 10 rows,"ExterQual: monotonic, spread 1.41; KitchenQual: monotonic, spread 1.13; BsmtQual: monotonic, spread 1.15",confirmed,False
+P-54,§8.6,"Condition scales (ExterCond, GarageCond) show a weaker pattern",E-23,"not monotonic, or spread below every quality scale's","ExterCond: not monotonic, spread 0.36; GarageCond: not monotonic, spread 0.53",confirmed,False
+P-55,§9.2,3 of the out-of-scope homes are partial sales priced far below their size trend,E-25,SaleCondition Partial with residual < -3 SD,"3 partial sales, residuals -8.8, -7.1, -6.2 SD",confirmed,False
+P-56,§9.2,The other 2 out-of-scope homes are among the most expensive,E-25,price percentile >= 99 in the raw file,"2 homes at percentiles 99.97, 100.00",confirmed,False
+P-57,§9.2,The out-of-scope homes flatten the size-price slope,E-26,slope on in-scope rows > slope on all rows,"slope per 1,000 sq ft: all 0.561, in scope 0.594",confirmed,False
+P-58,§11.4,New-construction sales are associated with higher prices,E-31,SaleType New has the highest median among levels with >= 10 rows,highest: New (+0.46 log vs overall),confirmed,False
+P-59,§11.5,Abnormal and family sales tend to sell below market value,E-31,Abnorml and Family medians below Normal,"Abnorml 11.748, Family 11.822, Normal 11.977",confirmed,False
+P-60,"§1.5, §15.1","Most missing values mean 'feature absent', not 'unknown'",E-09,>= 90% of missing cells are absent,96.3% of 13997 missing cells absent,confirmed,False

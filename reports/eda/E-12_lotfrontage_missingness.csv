@@ -1,0 +1,3 @@
+LotFrontage,n,median_log_price,mean_log_price,sd_log_price,share_pct
+missing,382,12.05786838,12.07043785,0.314514407,16.32478632
+recorded,1958,11.96718709,12.01012763,0.4218163292,83.67521368

@@ -1,0 +1,83 @@
+column,source_name,role,schema_dtype,loaded_dtype,dtype_matches,nullable,n_missing
+Id,Order,identifier,int,int64,True,False,0
+PID,PID,identifier,string,str,True,False,0
+MSSubClass,MS SubClass,model_input,int,int64,True,False,0
+MSZoning,MS Zoning,model_input,category,str,True,False,0
+LotFrontage,Lot Frontage,model_input,float,float64,True,True,490
+LotArea,Lot Area,model_input,int,int64,True,False,0
+Street,Street,model_input,category,str,True,False,0
+Alley,Alley,model_input,category,str,True,True,2732
+LotShape,Lot Shape,model_input,category,str,True,False,0
+LandContour,Land Contour,model_input,category,str,True,False,0
+Utilities,Utilities,model_input,category,str,True,False,0
+LotConfig,Lot Config,model_input,category,str,True,False,0
+LandSlope,Land Slope,model_input,category,str,True,False,0
+Neighborhood,Neighborhood,model_input,category,str,True,False,0
+Condition1,Condition 1,model_input,category,str,True,False,0
+Condition2,Condition 2,model_input,category,str,True,False,0
+BldgType,Bldg Type,model_input,category,str,True,False,0
+HouseStyle,House Style,model_input,category,str,True,False,0
+OverallQual,Overall Qual,model_input,int,int64,True,False,0
+OverallCond,Overall Cond,model_input,int,int64,True,False,0
+YearBuilt,Year Built,model_input,int,int64,True,False,0
+YearRemodAdd,Year Remod/Add,model_input,int,int64,True,False,0
+RoofStyle,Roof Style,model_input,category,str,True,False,0
+RoofMatl,Roof Matl,model_input,category,str,True,False,0
+Exterior1st,Exterior 1st,model_input,category,str,True,False,0
+Exterior2nd,Exterior 2nd,model_input,category,str,True,False,0
+MasVnrType,Mas Vnr Type,model_input,category,str,True,True,23
+MasVnrArea,Mas Vnr Area,model_input,float,float64,True,True,23
+ExterQual,Exter Qual,model_input,category,str,True,False,0
+ExterCond,Exter Cond,model_input,category,str,True,False,0
+Foundation,Foundation,model_input,category,str,True,False,0
+BsmtQual,Bsmt Qual,model_input,category,str,True,True,80
+BsmtCond,Bsmt Cond,model_input,category,str,True,True,80
+BsmtExposure,Bsmt Exposure,model_input,category,str,True,True,83
+BsmtFinType1,BsmtFin Type 1,model_input,category,str,True,True,80
+BsmtFinSF1,BsmtFin SF 1,model_input,float,float64,True,True,1
+BsmtFinType2,BsmtFin Type 2,model_input,category,str,True,True,81
+BsmtFinSF2,BsmtFin SF 2,model_input,float,float64,True,True,1
+BsmtUnfSF,Bsmt Unf SF,model_input,float,float64,True,True,1
+TotalBsmtSF,Total Bsmt SF,model_input,float,float64,True,True,1
+Heating,Heating,model_input,category,str,True,False,0
+HeatingQC,Heating QC,model_input,category,str,True,False,0
+CentralAir,Central Air,model_input,category,str,True,False,0
+Electrical,Electrical,model_input,category,str,True,True,1
+1stFlrSF,1st Flr SF,model_input,int,int64,True,False,0
+2ndFlrSF,2nd Flr SF,model_input,int,int64,True,False,0
+LowQualFinSF,Low Qual Fin SF,model_input,int,int64,True,False,0
+GrLivArea,Gr Liv Area,model_input,int,int64,True,False,0
+BsmtFullBath,Bsmt Full Bath,model_input,float,float64,True,True,2
+BsmtHalfBath,Bsmt Half Bath,model_input,float,float64,True,True,2
+FullBath,Full Bath,model_input,int,int64,True,False,0
+HalfBath,Half Bath,model_input,int,int64,True,False,0
+BedroomAbvGr,Bedroom AbvGr,model_input,int,int64,True,False,0
+KitchenAbvGr,Kitchen AbvGr,model_input,int,int64,True,False,0
+KitchenQual,Kitchen Qual,model_input,category,str,True,False,0
+TotRmsAbvGrd,TotRms AbvGrd,model_input,int,int64,True,False,0
+Functional,Functional,model_input,category,str,True,False,0
+Fireplaces,Fireplaces,model_input,int,int64,True,False,0
+FireplaceQu,Fireplace Qu,model_input,category,str,True,True,1422
+GarageType,Garage Type,model_input,category,str,True,True,157
+GarageYrBlt,Garage Yr Blt,model_input,float,float64,True,True,159
+GarageFinish,Garage Finish,model_input,category,str,True,True,159
+GarageCars,Garage Cars,model_input,float,float64,True,True,1
+GarageArea,Garage Area,model_input,float,float64,True,True,1
+GarageQual,Garage Qual,model_input,category,str,True,True,159
+GarageCond,Garage Cond,model_input,category,str,True,True,159
+PavedDrive,Paved Drive,model_input,category,str,True,False,0
+WoodDeckSF,Wood Deck SF,model_input,int,int64,True,False,0
+OpenPorchSF,Open Porch SF,model_input,int,int64,True,False,0
+EnclosedPorch,Enclosed Porch,model_input,int,int64,True,False,0
+3SsnPorch,3Ssn Porch,model_input,int,int64,True,False,0
+ScreenPorch,Screen Porch,model_input,int,int64,True,False,0
+PoolArea,Pool Area,model_input,int,int64,True,False,0
+PoolQC,Pool QC,model_input,category,str,True,True,2917
+Fence,Fence,model_input,category,str,True,True,2358
+MiscFeature,Misc Feature,model_input,category,str,True,True,2824
+MiscVal,Misc Val,model_input,int,int64,True,False,0
+MoSold,Mo Sold,model_input,int,int64,True,False,0
+YrSold,Yr Sold,model_input,int,int64,True,False,0
+SaleType,Sale Type,excluded,category,str,True,False,0
+SaleCondition,Sale Condition,excluded,category,str,True,False,0
+SalePrice,SalePrice,target,int,int64,True,False,0

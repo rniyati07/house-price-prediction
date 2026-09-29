@@ -1,0 +1,11 @@
+scale,levels_used,assessable,monotonic,median_spread,note
+ExterQual,Fa|TA|Gd|Ex,True,True,1.40546652,median log price rises through every level with at least 10 rows
+ExterCond,Fa|TA|Gd,True,False,0.3610107105,not monotonic across levels with at least 10 rows
+BsmtQual,None|Fa|TA|Gd|Ex,True,True,1.145304194,median log price rises through every level with at least 10 rows
+BsmtCond,None|Fa|TA|Gd,True,True,0.6840074267,median log price rises through every level with at least 10 rows
+HeatingQC,Fa|TA|Gd|Ex,True,True,0.4823209512,median log price rises through every level with at least 10 rows
+KitchenQual,Fa|TA|Gd|Ex,True,True,1.129858385,median log price rises through every level with at least 10 rows
+FireplaceQu,None|Po|Fa|TA|Gd|Ex,True,True,0.9276830579,median log price rises through every level with at least 10 rows
+GarageQual,None|Fa|TA|Gd,True,True,0.9046879058,median log price rises through every level with at least 10 rows
+GarageCond,None|Po|Fa|TA|Gd,True,False,0.5257249365,not monotonic across levels with at least 10 rows
+PoolQC,None,False,False,0,not assessable: fewer than two levels with at least 10 rows

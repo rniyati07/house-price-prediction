@@ -1,0 +1,7 @@
+check,result,detail
+row_count,2930,rows in the raw file
+column_count,82,columns in the raw file
+Id_unique,True,0 duplicate value(s)
+PID_unique,True,0 duplicate value(s)
+SalePrice_positive,True,0 value(s) <= 0
+raw_sha256_confirmed,True,65a1cbb89c2b58b11674097135dd04e710df5db726bcfe6ec551de38b44e4911

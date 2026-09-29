@@ -20,3 +20,4 @@ pytest
 ruff
 mypy
 pre-commit
+jupyter

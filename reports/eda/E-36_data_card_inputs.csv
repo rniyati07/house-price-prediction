@@ -1,0 +1,14 @@
+issue,status,evidence,detail
+Parsing hazard: MasVnrType literal 'None',confirmed,E-04,"Default parsing would report 1,775 missing instead of 23"
+basement_exposure_missing_with_basement: Basement exists (BsmtQual recorded) but BsmtExposure is missing (DOC-02 §6.6).,confirmed,E-11,"3 row(s): Ids 67, 1797, 2780"
+basement_fintype2_missing_with_area: BsmtFinSF2 > 0 but BsmtFinType2 is missing (DOC-02 §6.6).,confirmed,E-11,1 row(s): Ids 445
+"basement_areas_unrecorded: Basement square-footage fields are missing (unknown, not zero).",confirmed,E-11,1 row(s): Ids 1342
+garage_partially_recorded: A garage type is recorded but finish/quality/condition/year is missing (unknown values inside 'feature absent' columns).,confirmed,E-11,"2 row(s): Ids 1357, 2237"
+garage_built_after_sale: GarageYrBlt is later than YrSold (e.g. the documented 2207 typo).,confirmed,E-11,"2 row(s): Ids 2181, 2261"
+house_built_after_sale: YearBuilt is later than YrSold (sold before completion).,confirmed,E-11,1 row(s): Ids 2181
+remodel_before_built: YearRemodAdd is earlier than YearBuilt.,confirmed,E-11,1 row(s): Ids 851
+masvnr_none_with_area: MasVnrType is 'None' but MasVnrArea > 0.,confirmed,E-11,"7 row(s): Ids 364, 404, 442, 1862, 1914, 2004, 2529"
+"remodel_year_at_floor: YearRemodAdd = 1950 for a house built before 1950 (recording floor, DOC-02 §10.5).",confirmed,E-11,339 row(s)
+Rare categories (< 1% of development rows),confirmed,E-20,104 levels in 34 features
+Dictionary-versus-file spellings,confirmed,E-02,Allowed lists include the file spellings; values are not normalised
+"Register discrepancy P-44: Strong right skew in LotArea, GrLivArea, MasVnrArea, MiscVal, PoolArea, LowQualFinSF, 3SsnPorch",not confirmed,E-13,"LotArea 12.9, GrLivArea 0.9, MasVnrArea 2.4, MiscVal 21.4, PoolArea 18.2, LowQualFinSF 12.8, 3SsnPorch 11.3"

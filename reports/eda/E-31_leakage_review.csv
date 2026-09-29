@@ -1,0 +1,7 @@
+column,known_at_listing,decision,reason
+YrSold,"yes, as the valuation year",kept,Valuation year; needed for ages (ADR-02)
+MoSold,"yes, as the valuation month",kept,Kept as provided (DOC-02 §11.6)
+SaleType,no,excluded,"Legal/financial form of the completed transaction, not a property attribute (ADR-02)"
+SaleCondition,no,excluded,"Circumstances of the completed sale (for example foreclosure), a transaction outcome (ADR-02); rows are kept"
+Id,not a property attribute,excluded,Record identifier (IN-03)
+PID,not a property attribute,excluded,Parcel identifier (IN-03)
