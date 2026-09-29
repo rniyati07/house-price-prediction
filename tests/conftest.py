@@ -80,7 +80,7 @@ def make_env(
     config_dir.mkdir(parents=True, exist_ok=True)
     raw_path.parent.mkdir(parents=True, exist_ok=True)
     raw_path.write_bytes(FIXTURE_CSV.read_bytes() if raw_bytes is None else raw_bytes)
-    for name in ("schema.yaml", "validation.yaml", "features.yaml"):
+    for name in ("schema.yaml", "validation.yaml", "features.yaml", "models.yaml"):
         shutil.copyfile(CONFIG_DIR / name, config_dir / name)
 
     data = yaml.safe_load((CONFIG_DIR / "data.yaml").read_text(encoding="utf-8"))

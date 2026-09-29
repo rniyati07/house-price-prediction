@@ -234,6 +234,33 @@ class FeatureConfig(StrictModel):
         return self
 
 
+# ------------------------------------------------------------------------- models.yaml
+
+
+class DummyBaselineConfig(StrictModel):
+    """``dummy_median`` (DOC-03 §8.2): the full pipeline with ``DummyRegressor``."""
+
+    branch: Literal["linear", "tree"]
+    strategy: Literal["median"]
+
+
+class TwoFeatureBaselineConfig(StrictModel):
+    """``linear_2feat`` (DOC-03 §8.3): ``LinearRegression`` on the two dominant drivers."""
+
+    features: list[str] = Field(min_length=1)
+
+
+class BaselinesConfig(StrictModel):
+    dummy_median: DummyBaselineConfig
+    linear_2feat: TwoFeatureBaselineConfig
+
+
+class ModelsConfig(StrictModel):
+    """``models.yaml``: candidate definitions (DOC-03 §5.1, §8). M6 defines the baselines."""
+
+    baselines: BaselinesConfig
+
+
 # ------------------------------------------------------------------------------ loading
 
 ModelT = TypeVar("ModelT", bound=BaseModel)
@@ -263,6 +290,11 @@ def load_model(model: type[ModelT], path: Path) -> ModelT:
 def load_feature_config(config_dir: Path = DEFAULT_CONFIG_DIR) -> FeatureConfig:
     """Load ``features.yaml`` (DOC-03 §5.1) from ``config_dir``."""
     return load_model(FeatureConfig, config_dir / "features.yaml")
+
+
+def load_models_config(config_dir: Path = DEFAULT_CONFIG_DIR) -> ModelsConfig:
+    """Load ``models.yaml`` (DOC-03 §5.1) from ``config_dir``."""
+    return load_model(ModelsConfig, config_dir / "models.yaml")
 
 
 def config_hash(*models: BaseModel) -> str:

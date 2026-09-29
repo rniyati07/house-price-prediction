@@ -7,6 +7,9 @@ name = "house-price"
 version = "0.1.0"
 requires-python = ">=3.11"
 
+[project.scripts]
+house-price = "house_price.cli:main"
+
 [tool.setuptools.packages.find]
 where = ["src"]
 

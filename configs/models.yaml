@@ -1,0 +1,19 @@
+# Candidate definitions (DOC-03 §5.1, §8). Loaded into house_price.config.ModelsConfig.
+#
+# M6 defines the two baselines (DOC-03 §8.2, §8.3). They set the floor every candidate
+# must beat (ADR-10) and are never eligible for selection or deployment. The candidates
+# (Ridge, Lasso, Random Forest, LightGBM, blend), reference configurations, search spaces,
+# and budgets are added in M7 and M8.
+
+baselines:
+  # The "no model" floor: predicts the fitting data's median log price for every house.
+  # It uses the full pipeline (DOC-03 §7.1); the branch only affects preprocessing, which
+  # a DummyRegressor ignores.
+  dummy_median:
+    branch: tree
+    strategy: median
+
+  # The "rule of thumb" floor: LinearRegression on the two documented dominant drivers
+  # (DOC-02 §2.2), passed through unscaled, inside the log-target wrapper.
+  linear_2feat:
+    features: ["OverallQual", "GrLivArea"]

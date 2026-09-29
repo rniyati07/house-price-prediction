@@ -21,13 +21,31 @@ from __future__ import annotations
 
 import numpy as np
 from sklearn.base import BaseEstimator
-from sklearn.compose import TransformedTargetRegressor
+from sklearn.compose import ColumnTransformer, TransformedTargetRegressor
 from sklearn.pipeline import Pipeline
 
 from house_price.config import FeatureConfig, SchemaConfig
 from house_price.features.engineer import FeatureEngineer
 from house_price.features.semantic import SemanticNAFiller
 from house_price.pipelines.branches import Branch, build_column_transformer, check_group_coverage
+
+
+def wrap_estimator(
+    preprocess: ColumnTransformer, estimator: BaseEstimator, feature_config: FeatureConfig
+) -> TransformedTargetRegressor:
+    """The outer shape shared by every model: log target around filler, engineer,
+    ``preprocess``, and ``estimator`` (DOC-03 §7.1). Candidates normally use
+    :func:`build_pipeline`; the two-feature baseline supplies its own pass-through
+    ``preprocess`` (DOC-03 §8.3)."""
+    regressor = Pipeline(
+        [
+            ("semantic_na", SemanticNAFiller.from_config(feature_config)),
+            ("features", FeatureEngineer.from_config(feature_config)),
+            ("preprocess", preprocess),
+            ("model", estimator),
+        ]
+    )
+    return TransformedTargetRegressor(regressor=regressor, func=np.log1p, inverse_func=np.expm1)
 
 
 def build_pipeline(
@@ -43,12 +61,6 @@ def build_pipeline(
     ``clone``-able; each call builds fresh components.
     """
     check_group_coverage(branch, feature_config, schema)
-    regressor = Pipeline(
-        [
-            ("semantic_na", SemanticNAFiller.from_config(feature_config)),
-            ("features", FeatureEngineer.from_config(feature_config)),
-            ("preprocess", build_column_transformer(branch, feature_config)),
-            ("model", estimator),
-        ]
+    return wrap_estimator(
+        build_column_transformer(branch, feature_config), estimator, feature_config
     )
-    return TransformedTargetRegressor(regressor=regressor, func=np.log1p, inverse_func=np.expm1)

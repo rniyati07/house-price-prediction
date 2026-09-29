@@ -94,6 +94,20 @@ def _nominal(branch: Branch) -> Pipeline:
     return Pipeline([("impute", SimpleImputer(strategy="most_frequent")), ("encode", encoder)])
 
 
+def build_passthrough_transformer(columns: list[str]) -> ColumnTransformer:
+    """Pass ``columns`` through unchanged and drop everything else.
+
+    Used only by the two-feature heuristic baseline, which sees ``OverallQual`` and
+    ``GrLivArea`` and nothing else, with no scaling (DOC-03 §7.1, §8.3).
+    """
+    transformer = ColumnTransformer(
+        transformers=[("baseline", "passthrough", list(columns))],
+        remainder="drop",
+        verbose_feature_names_out=True,
+    )
+    return transformer.set_output(transform="pandas")
+
+
 def build_column_transformer(branch: Branch, feature_config: FeatureConfig) -> ColumnTransformer:
     """Build the linear or tree ``ColumnTransformer`` (DOC-03 §7.5), with pandas output."""
     groups = branch_groups(branch, feature_config)
