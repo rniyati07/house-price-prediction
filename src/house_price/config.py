@@ -60,6 +60,20 @@ class DataConfig(StrictModel):
 # --------------------------------------------------------------------- validation.yaml
 
 
+class SmokeConfig(StrictModel):
+    """Smoke training (DN-17, DOC-03 §16.3): a reduced run that exercises every stage and
+    can never be released. The development sample and the holdout substitute are disjoint
+    samples of development rows; the real holdout is never used."""
+
+    sample_rows: int = Field(ge=10)
+    holdout_rows: int = Field(ge=1)
+    cv_folds: int = Field(ge=2)
+    cv_repeats: int = Field(ge=1)
+    grid_points: int = Field(ge=2)
+    random_forest_trials: int = Field(ge=1)
+    lightgbm_trials: int = Field(ge=1)
+
+
 class ValidationConfig(StrictModel):
     seed: int
     holdout_fraction: float = Field(gt=0.0, lt=1.0)
@@ -68,6 +82,7 @@ class ValidationConfig(StrictModel):
     cv_repeats: int = Field(ge=1)
     reproducibility_tolerance: float = Field(gt=0.0)
     split_balance_tolerance_pp: float = Field(gt=0.0)
+    smoke: SmokeConfig | None = None
 
 
 # ------------------------------------------------------------------------- schema.yaml

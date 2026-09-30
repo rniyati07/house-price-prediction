@@ -229,3 +229,28 @@ def m7_train(tmp_path_factory: pytest.TempPathFactory) -> M7Train:
     set_ablation_outcome(env, first.outcome_check.proposed)
     second = run_train(env.config_dir, env.root, uri)
     return M7Train(env, uri, first, second, repo_before, repo_fingerprint())
+
+
+@dataclass(frozen=True)
+class SmokeProject:
+    """DN-17 smoke on the committed synthetic fixture (RC-04), in an isolated project whose
+    holdout file is deleted after the split: ``train --smoke`` then ``evaluate --smoke``."""
+
+    root: Path
+    train: TrainResult
+    evaluation: dict[str, object]
+
+
+@pytest.fixture(scope="session")
+def smoke_project(tmp_path_factory: pytest.TempPathFactory) -> SmokeProject:
+    from house_price.data import split
+    from house_price.evaluation.holdout import run_evaluate
+    from tests.fixtures.synthetic import prepare
+
+    root = tmp_path_factory.mktemp("smoke_project")
+    config_dir = prepare(root)
+    assert split.main(["--config-dir", str(config_dir), "--root", str(root)]) == 0
+    load_project_config(config_dir, root).holdout_path.unlink()  # smoke never needs it
+    train = run_train(config_dir, root, smoke=True)
+    evaluation = run_evaluate(config_dir, root, smoke=True)
+    return SmokeProject(root, train, evaluation)

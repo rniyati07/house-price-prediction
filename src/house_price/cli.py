@@ -1,8 +1,9 @@
 """The ``house-price`` command line (FR-023, DOC-03 §3.2).
 
 Subcommands are added milestone by milestone. M6 adds ``train`` (extended by M7 with the
-ablation, the RC-02 check, and the development checks); ``evaluate`` and
-``freeze`` (M9, M10) and ``predict`` (M11) follow.
+ablation, the RC-02 check, and the development checks, by M8 with tuning and the comparison,
+and by M9 with selection and diagnostics); M9 adds ``evaluate`` (up to the temporal
+diagnostic) and ``--smoke`` (DN-17); ``freeze`` (M10) and ``predict`` (M11) follow.
 """
 
 from __future__ import annotations
@@ -25,7 +26,13 @@ def _train(args: argparse.Namespace) -> int:
 
     try:
         result = run_train(
-            args.config_dir, args.root, args.tracking_uri, args.results_dir, args.argv, progress
+            args.config_dir,
+            args.root,
+            args.tracking_uri,
+            args.results_dir,
+            args.argv,
+            progress,
+            smoke=args.smoke,
         )
     except (ConfigError, DataError, TrackingError) as exc:
         print(f"ERROR: {exc}", file=sys.stderr)
@@ -34,17 +41,48 @@ def _train(args: argparse.Namespace) -> int:
     return EXIT_RC02_STOP if result.stopped else 0
 
 
+def _evaluate(args: argparse.Namespace) -> int:
+    from house_price.evaluation.holdout import run_evaluate
+    from house_price.models.selection import SelectionError
+    from house_price.tracking import TrackingError
+
+    def progress(message: str) -> None:
+        print(f"[evaluate] {message}", file=sys.stderr, flush=True)
+
+    try:
+        summary = run_evaluate(args.config_dir, args.root, args.tracking_uri, smoke=args.smoke,
+                               argv=args.argv, log=progress)  # fmt: skip
+    except (ConfigError, DataError, TrackingError, SelectionError) as exc:
+        print(f"ERROR: {exc}", file=sys.stderr)
+        return 1
+    import json
+
+    print(json.dumps(summary, indent=2))
+    return 0
+
+
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(prog="house-price", description="House Price Prediction")
     commands = parser.add_subparsers(dest="command")
     train = commands.add_parser(
-        "train", help="baselines, feature ablation (RC-02 check), development checks (M6-M7)"
+        "train", help="baselines, ablation (RC-02), tuning, comparison, selection (M6-M9)"
     )
     train.add_argument("--config-dir", type=Path, default=None, help="default: <root>/configs")
     train.add_argument("--root", type=Path, default=None, help="project root (default: cwd)")
     train.add_argument("--tracking-uri", default=None, help="default: file store <root>/mlruns")
     train.add_argument("--results-dir", type=Path, default=None, help="default: <root>/results")
+    train.add_argument("--smoke", action="store_true", help="DN-17 smoke run (hpp-smoke)")
     train.set_defaults(handler=_train)
+    evaluate = commands.add_parser(
+        "evaluate",
+        help="final holdout evaluation, baseline reference, gates, temporal diagnostic (M9)",
+    )
+    evaluate.add_argument("--config-dir", type=Path, default=None, help="default: <root>/configs")
+    evaluate.add_argument("--root", type=Path, default=None, help="project root (default: cwd)")
+    evaluate.add_argument("--tracking-uri", default=None, help="default: file store <root>/mlruns")
+    evaluate.add_argument("--smoke", action="store_true",
+                          help="DN-17: the holdout substitute; never the real holdout")  # fmt: skip
+    evaluate.set_defaults(handler=_evaluate)
     return parser
 
 

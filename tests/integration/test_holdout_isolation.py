@@ -28,7 +28,7 @@ from house_price.data.split import create_or_load_split
 from tests.conftest import CONFIG_DIR, REPO_ROOT, M7Train, make_env
 
 HOLDOUT_REFERENCE = re.compile(r"holdout_path|holdout\.csv")
-ALLOWED = {"config.py", "data/split.py"}
+ALLOWED = {"config.py", "data/split.py", "evaluation/holdout.py"}  # M9: the only reader
 
 
 def _loaded(env_root: Path) -> tuple[Any, Any, Any]:

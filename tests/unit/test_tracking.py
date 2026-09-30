@@ -249,8 +249,8 @@ def test_m7_records_summarize_and_link_the_mlflow_runs(m7_train: M7Train) -> Non
     for result in (m7_train.first, m7_train.second):
         assert result.result_path is not None
         record = read_result(result.result_path)
-        assert record["milestone"] == "M8" and record["run_id"] == result.pipeline_run_id
-        assert result.result_path.parent.parent == env.root / "results" / "M8"
+        assert record["milestone"] == "M9" and record["run_id"] == result.pipeline_run_id
+        assert result.result_path.parent.parent == env.root / "results" / "M9"
         mlflow = record["findings"]["mlflow"]
         assert mlflow["tracking_uri"] == m7_train.uri
         assert mlflow["runs"]["hpp-baselines"] == result.run_ids
@@ -377,7 +377,14 @@ def test_seven_candidate_comparison(m7_train: M7Train) -> None:
     record = read_result(result.result_path)  # type: ignore[arg-type]
     comparison = record["findings"]["cv_comparison"]
     assert comparison["candidates"] == list(SEVEN) and "no model is selected" in comparison["note"]
-    assert "selection" not in record["findings"]  # M9
+    # M9: train now ends with selection; the comparison itself selects nothing
+    assert record["findings"]["selection"]["selected"]["name"] in {
+        "ridge",
+        "lasso",
+        "random_forest",
+        "lightgbm",
+        "blend",
+    }
 
 
 def test_m8_record_summarizes_tuning(m7_train: M7Train) -> None:
@@ -407,7 +414,7 @@ def test_a_failed_training_run_is_recorded(tmp_path: Path) -> None:
         run_train(env.config_dir, env.root, (tmp_path / "mlruns").as_uri())
     (line,) = read_index(tmp_path / "results")
     record = read_result(tmp_path / "results" / line["result"])
-    assert line["milestone"] == "M8" and record["status"] == "failed"
+    assert line["milestone"] == "M9" and record["status"] == "failed"
     assert record["error"]["type"] == "TrainError" and "never creates" in record["error"]["message"]
 
 

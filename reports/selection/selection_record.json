@@ -1,0 +1,562 @@
+{
+  "selection_record_id": "81225017-6b18-489b-86d0-d983088eef83",
+  "pipeline_run_id": "1e521c20-e863-43c2-97a6-96aa5d300d92",
+  "created_at": "2026-09-30T15:17:45+00:00",
+  "rules": {
+    "primary_metric": "mean CV log-RMSE (ADR-12)",
+    "standard_error": "std(fold scores, ddof=1) / sqrt(n folds) (DN-04)",
+    "one_standard_error": "DOC-03 \u00a711.4 (ADR-11)",
+    "tiers": "1 ridge/lasso < 2 random_forest < 3 lightgbm < 4 blend (DOC-03 \u00a78.1, DN-08)",
+    "tie_break": "within a tier the lower mean; exact tie -> ridge (DN-08)",
+    "blend_admission": "mean_blend < m_single - se_single, else excluded (DOC-03 \u00a711.5)"
+  },
+  "candidates": [
+    {
+      "name": "dummy_median",
+      "tier": null,
+      "eligible": false,
+      "mean": 0.4083346536724928,
+      "se": 0.0017727958119726,
+      "fold_scores": [
+        0.4043265257254675,
+        0.3943312917048695,
+        0.4147217611112078,
+        0.4206159790780017,
+        0.4074517091395662,
+        0.4119309984342013,
+        0.4069979623552568,
+        0.4111667278875382,
+        0.3987137726529712,
+        0.4129657417284155,
+        0.4136908611243236,
+        0.4056338221375582,
+        0.4130809660967317,
+        0.4087996153827889,
+        0.4005920705284936
+      ],
+      "secondary": {
+        "cv_mae": 56006.688888888886,
+        "cv_mape": 31.98305454735949,
+        "cv_r2": -0.0671009825437269
+      }
+    },
+    {
+      "name": "linear_2feat",
+      "tier": null,
+      "eligible": false,
+      "mean": 0.1928724104739298,
+      "se": 0.0020117752628401,
+      "fold_scores": [
+        0.1871510789394424,
+        0.1938114048634152,
+        0.2076306424370289,
+        0.185936923482814,
+        0.1902230599322588,
+        0.2023554670506849,
+        0.1887144167228113,
+        0.2049066224839988,
+        0.1797730689498963,
+        0.1884451261665116,
+        0.1962987691071265,
+        0.1931517938893036,
+        0.1990085167147748,
+        0.187936933258598,
+        0.1877423331102819
+      ],
+      "secondary": {
+        "cv_mae": 24774.610830730988,
+        "cv_mape": 15.01107398929725,
+        "cv_r2": 0.8074808678976394
+      }
+    },
+    {
+      "name": "ridge",
+      "tier": 1,
+      "eligible": true,
+      "mean": 0.1125087799161635,
+      "se": 0.0023832993898002,
+      "fold_scores": [
+        0.0980576400644375,
+        0.1220150103315464,
+        0.1311022733814345,
+        0.1063742193828947,
+        0.1084583056646182,
+        0.1279175515240429,
+        0.104317323771045,
+        0.1157609644609068,
+        0.1072911137626108,
+        0.1037771357993543,
+        0.1116663483535617,
+        0.1201399852130325,
+        0.109532023033105,
+        0.1109856185422758,
+        0.110236185457587
+      ],
+      "secondary": {
+        "cv_mae": 13274.950114339626,
+        "cv_mape": 7.91292243729109,
+        "cv_r2": 0.9377268590328428
+      }
+    },
+    {
+      "name": "lasso",
+      "tier": 1,
+      "eligible": true,
+      "mean": 0.1126339016464248,
+      "se": 0.0023114284869593,
+      "fold_scores": [
+        0.0990621151177789,
+        0.1232853323982446,
+        0.1317409240643033,
+        0.1069691237941475,
+        0.1078665383025496,
+        0.1254042939599784,
+        0.1039470736270046,
+        0.1157019392508915,
+        0.1077048463486881,
+        0.1045583222809398,
+        0.1114614693233369,
+        0.1197688261079226,
+        0.1093991647236621,
+        0.1119341554144861,
+        0.1107043999824382
+      ],
+      "secondary": {
+        "cv_mae": 13181.731181552828,
+        "cv_mape": 7.857839027067709,
+        "cv_r2": 0.9377672412129338
+      }
+    },
+    {
+      "name": "random_forest",
+      "tier": 2,
+      "eligible": true,
+      "mean": 0.1290330593748786,
+      "se": 0.0028940619470808,
+      "fold_scores": [
+        0.1136692846208865,
+        0.1313017616513261,
+        0.1489653896782113,
+        0.1271439713171875,
+        0.1249227341433359,
+        0.1512268517904177,
+        0.115944897798765,
+        0.1393756439534485,
+        0.1158920856852577,
+        0.121010635583715,
+        0.1268483113757456,
+        0.1318053506251895,
+        0.1363998309237918,
+        0.1251249224537212,
+        0.1258642190221799
+      ],
+      "secondary": {
+        "cv_mae": 15174.55900265623,
+        "cv_mape": 9.006395578620763,
+        "cv_r2": 0.9139505572032932
+      }
+    },
+    {
+      "name": "lightgbm",
+      "tier": 3,
+      "eligible": true,
+      "mean": 0.1133036330268445,
+      "se": 0.0026038945783845,
+      "fold_scores": [
+        0.1023877892371608,
+        0.1172237821916199,
+        0.1338224340876251,
+        0.1104315817997442,
+        0.1079187417920875,
+        0.1320809180526176,
+        0.0997195547267817,
+        0.1206512386744499,
+        0.1031978192975182,
+        0.1031046458547773,
+        0.1092639862691377,
+        0.1168529381914867,
+        0.1151844083021393,
+        0.1144702719614309,
+        0.11324438496409
+      ],
+      "secondary": {
+        "cv_mae": 13017.265084984138,
+        "cv_mape": 7.8061576984372,
+        "cv_r2": 0.937748241751439
+      }
+    },
+    {
+      "name": "blend",
+      "tier": 4,
+      "eligible": true,
+      "mean": 0.1093068923744996,
+      "se": 0.0025459858302873,
+      "fold_scores": [
+        0.0961225389833642,
+        0.1167015974281272,
+        0.1295986002357897,
+        0.1038066946637513,
+        0.1049273538808246,
+        0.1271268310772222,
+        0.0982161983138668,
+        0.1145859287682417,
+        0.1010455417763575,
+        0.1000281520332847,
+        0.1069957074374393,
+        0.1155536246375319,
+        0.1088161336208155,
+        0.1087282977292701,
+        0.1073501850316074
+      ],
+      "secondary": {
+        "cv_mae": 12549.327639978228,
+        "cv_mape": 7.528689304982684,
+        "cv_r2": 0.942610448663036
+      }
+    }
+  ],
+  "eligible": [
+    "ridge",
+    "lasso",
+    "random_forest",
+    "lightgbm",
+    "blend"
+  ],
+  "best_single": {
+    "name": "ridge",
+    "mean": 0.1125087799161635,
+    "se": 0.0023832993898002
+  },
+  "blend_admitted": {
+    "admitted": true,
+    "blend_mean": 0.1093068923744996,
+    "bar": 0.1101254805263633,
+    "rule": "mean_blend < m_single - se_single, else excluded (DOC-03 \u00a711.5)"
+  },
+  "threshold": {
+    "value": 0.1118528782047869,
+    "best": "blend",
+    "best_mean": 0.1093068923744996,
+    "best_se": 0.0025459858302873
+  },
+  "admissible": [
+    "blend"
+  ],
+  "one_se_choice": "blend",
+  "selected": {
+    "name": "blend",
+    "tier": 4,
+    "mean": 0.1093068923744996,
+    "se": 0.0025459858302873,
+    "hyperparameters": {
+      "linear": "ridge",
+      "tree": "lightgbm",
+      "weights": [
+        0.5,
+        0.5
+      ],
+      "linear_params": {
+        "alpha": 17.78279410038923
+      },
+      "tree_params": {
+        "learning_rate": 0.011349486638116238,
+        "num_leaves": 17,
+        "min_child_samples": 8,
+        "n_estimators": 1029,
+        "subsample": 0.6256694085817492,
+        "colsample_bytree": 0.4702479943777382,
+        "reg_alpha": 0.010347976644062,
+        "reg_lambda": 1.2598664312083141e-08
+      },
+      "linear_estimator_params": {
+        "alpha": 17.78279410038923
+      },
+      "tree_estimator_params": {
+        "deterministic": true,
+        "force_row_wise": true,
+        "n_jobs": 1,
+        "verbose": -1,
+        "learning_rate": 0.011349486638116238,
+        "n_estimators": 1029,
+        "num_leaves": 17,
+        "min_child_samples": 8,
+        "subsample": 0.6256694085817492,
+        "subsample_freq": 1,
+        "colsample_bytree": 0.4702479943777382,
+        "reg_alpha": 0.010347976644062,
+        "reg_lambda": 1.2598664312083141e-08,
+        "random_state": 42
+      }
+    },
+    "reason": "blend admitted (\u00a711.5): 0.109307 < 0.110125 = ridge mean 0.112509 - SE 0.002383; it replaces the \u00a711.4 result (blend)"
+  },
+  "baseline_margins": {
+    "dummy_median": {
+      "selected_minus_baseline": -0.2990277612979932,
+      "baseline_mean": 0.4083346536724928,
+      "baseline_se": 0.0017727958119726
+    },
+    "linear_2feat": {
+      "selected_minus_baseline": -0.0835655180994302,
+      "baseline_mean": 0.1928724104739298,
+      "baseline_se": 0.0020117752628401
+    }
+  },
+  "provenance": {
+    "source": "persisted M8 outputs (python -m house_price.models.selection --from-m8); no tuning rerun",
+    "m8_pipeline_run_id": "1e521c20-e863-43c2-97a6-96aa5d300d92",
+    "m8_git": {
+      "commit": "083a00cd2115eb5de14119e99fd54867f71a96a2",
+      "dirty": true
+    },
+    "m8_lineage": {
+      "data_sha256": "65a1cbb89c2b58b11674097135dd04e710df5db726bcfe6ec551de38b44e4911",
+      "split_manifest_sha256": "b3f92f466a19b894db2d9bad8307159bc0e370ad1ccb94764a6f9a59b2b1187b",
+      "config_hash": "28e7fd7430a537220eb29d2fdfa503e4ca459f0d315bd0293aa045ecae0cf9bf",
+      "config_hash_covers": [
+        "data",
+        "validation",
+        "schema",
+        "features",
+        "models"
+      ],
+      "folds_sha256": "ecd60e98b438e51adea2a2b083367f52af679b510d114c9ad353d2a1821ac69c",
+      "seed": 42
+    },
+    "m8_execution_budget": {
+      "config_dir": "artifacts\\m8_execution_config",
+      "used": {
+        "ridge_grid_points": 25,
+        "lasso_grid_points": 25,
+        "random_forest_trials": 15,
+        "lightgbm_trials": 30,
+        "cv_folds": 5,
+        "cv_repeats": 3,
+        "search_spaces": {
+          "ridge": {
+            "param": "alpha",
+            "low": 0.001,
+            "high": 1000.0,
+            "n": 25
+          },
+          "lasso": {
+            "param": "alpha",
+            "low": 1e-05,
+            "high": 0.1,
+            "n": 25
+          },
+          "random_forest": {
+            "n_estimators": {
+              "type": "int",
+              "low": 100.0,
+              "high": 600.0,
+              "log": false
+            },
+            "max_depth": {
+              "type": "int",
+              "low": 6.0,
+              "high": 30.0,
+              "log": false
+            },
+            "min_samples_split": {
+              "type": "int",
+              "low": 2.0,
+              "high": 20.0,
+              "log": false
+            },
+            "min_samples_leaf": {
+              "type": "int",
+              "low": 1.0,
+              "high": 10.0,
+              "log": false
+            },
+            "max_features": {
+              "type": "float",
+              "low": 0.2,
+              "high": 1.0,
+              "log": false
+            }
+          },
+          "lightgbm": {
+            "learning_rate": {
+              "type": "float",
+              "low": 0.01,
+              "high": 0.2,
+              "log": true
+            },
+            "num_leaves": {
+              "type": "int",
+              "low": 8.0,
+              "high": 64.0,
+              "log": false
+            },
+            "min_child_samples": {
+              "type": "int",
+              "low": 5.0,
+              "high": 50.0,
+              "log": false
+            },
+            "n_estimators": {
+              "type": "int",
+              "low": 200.0,
+              "high": 2000.0,
+              "log": false
+            },
+            "subsample": {
+              "type": "float",
+              "low": 0.5,
+              "high": 1.0,
+              "log": false
+            },
+            "colsample_bytree": {
+              "type": "float",
+              "low": 0.3,
+              "high": 1.0,
+              "log": false
+            },
+            "reg_alpha": {
+              "type": "float",
+              "low": 1e-08,
+              "high": 10.0,
+              "log": true
+            },
+            "reg_lambda": {
+              "type": "float",
+              "low": 1e-08,
+              "high": 10.0,
+              "log": true
+            }
+          }
+        }
+      },
+      "canonical_config_dir": "C:\\Users\\ADMIN\\Desktop\\house-price-prediction\\configs",
+      "deviations": [
+        "random_forest_trials: 15 (canonical 30)",
+        "lightgbm_trials: 30 (canonical 100)"
+      ],
+      "canonical": {
+        "ridge_grid_points": 25,
+        "lasso_grid_points": 25,
+        "random_forest_trials": 30,
+        "lightgbm_trials": 100,
+        "cv_folds": 5,
+        "cv_repeats": 3,
+        "search_spaces": {
+          "ridge": {
+            "param": "alpha",
+            "low": 0.001,
+            "high": 1000.0,
+            "n": 25
+          },
+          "lasso": {
+            "param": "alpha",
+            "low": 1e-05,
+            "high": 0.1,
+            "n": 25
+          },
+          "random_forest": {
+            "n_estimators": {
+              "type": "int",
+              "low": 100.0,
+              "high": 600.0,
+              "log": false
+            },
+            "max_depth": {
+              "type": "int",
+              "low": 6.0,
+              "high": 30.0,
+              "log": false
+            },
+            "min_samples_split": {
+              "type": "int",
+              "low": 2.0,
+              "high": 20.0,
+              "log": false
+            },
+            "min_samples_leaf": {
+              "type": "int",
+              "low": 1.0,
+              "high": 10.0,
+              "log": false
+            },
+            "max_features": {
+              "type": "float",
+              "low": 0.2,
+              "high": 1.0,
+              "log": false
+            }
+          },
+          "lightgbm": {
+            "learning_rate": {
+              "type": "float",
+              "low": 0.01,
+              "high": 0.2,
+              "log": true
+            },
+            "num_leaves": {
+              "type": "int",
+              "low": 8.0,
+              "high": 64.0,
+              "log": false
+            },
+            "min_child_samples": {
+              "type": "int",
+              "low": 5.0,
+              "high": 50.0,
+              "log": false
+            },
+            "n_estimators": {
+              "type": "int",
+              "low": 200.0,
+              "high": 2000.0,
+              "log": false
+            },
+            "subsample": {
+              "type": "float",
+              "low": 0.5,
+              "high": 1.0,
+              "log": false
+            },
+            "colsample_bytree": {
+              "type": "float",
+              "low": 0.3,
+              "high": 1.0,
+              "log": false
+            },
+            "reg_alpha": {
+              "type": "float",
+              "low": 1e-08,
+              "high": 10.0,
+              "log": true
+            },
+            "reg_lambda": {
+              "type": "float",
+              "low": 1e-08,
+              "high": 10.0,
+              "log": true
+            }
+          }
+        }
+      }
+    },
+    "blend_linear_component": "ridge",
+    "files": {
+      "artifacts/cv_comparison/comparison.csv": "1b3660b1166e28f2e89439e2c26d170cc9605a58d1fc25de8f044e3f9c3376af",
+      "artifacts/tuning/ridge_best.json": "a7593b037bd15200b26ca3916547a3449cde691ba5a4ff8a0993b9a91b9d18b3",
+      "artifacts/tuning/lasso_best.json": "8a1dea06899a0f3016a97402a680dd1c9f8ca6b133ad970863d049a2940f148a",
+      "artifacts/tuning/random_forest_best.json": "b823cb2fb01cb07d62a259f168827b063da16edb9de379d2d8b8c9b11d59e9fe",
+      "artifacts/tuning/lightgbm_best.json": "d359cebca42d1a6be5040edffbd23c41202c94e5424a3c65712743ad69b73bce",
+      "results/M8/20260930T095909Z_1e521c20/result.json": "4724fbc2e717d8615828abee367f81017f756ab34a02f73a1bca7112d9c82123",
+      "artifacts/cv_comparison/blend_oof.csv": "ebeb3c8b086375eda20368a734ca7a9367fbc2c95f49bdc8b155d69b46b1c284"
+    }
+  },
+  "diagnostic_report": {
+    "oof_predictions": "reports/selection/oof_predictions.csv",
+    "residual_trend": "reports/selection/residual_trend.csv",
+    "price_decile_bias": "reports/selection/price_decile_bias.csv",
+    "neighborhood_log_rmse": "reports/selection/neighborhood_log_rmse.csv",
+    "residual_plot": "reports/selection/residual_vs_predicted.png",
+    "decile_plot": "reports/selection/price_decile_bias.png",
+    "neighborhood_plot": "reports/selection/neighborhood_log_rmse.png"
+  }
+}

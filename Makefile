@@ -2,7 +2,7 @@
 # override it, e.g. `make test PYTHON=.venv/Scripts/python`.
 PYTHON ?= python
 
-.PHONY: setup lint format typecheck test validate-data split train
+.PHONY: setup lint format typecheck test validate-data split train evaluate smoke repro-check
 
 setup:
 	$(PYTHON) -m pip install -r requirements.txt
@@ -29,7 +29,25 @@ validate-data:
 split:
 	$(PYTHON) -m house_price.data.split
 
-# house-price train: baselines (M6), then feature ablation with the RC-02 check and the
-# candidate development checks (M7). Exit code 3 = RC-02 stop (review the ablation).
+# house-price train: baselines (M6), ablation with the RC-02 check and development checks
+# (M7), tuning, blend and 7-candidate comparison (M8), selection and the diagnostic report
+# (M9). Exit code 3 = RC-02 stop (review the ablation). Development set only.
 train:
 	$(PYTHON) -m house_price.cli train
+
+# house-price evaluate: the ONE final holdout evaluation (M13 Release Run only, DOC-05
+# RC-01). Refuses without a completed human diagnostic review (DN-19).
+evaluate:
+	$(PYTHON) -m house_price.cli evaluate
+
+# DN-17 smoke run: train --smoke then evaluate --smoke on a development-set sample with a
+# holdout substitute (never the real holdout); everything in hpp-smoke and artifacts/smoke/.
+smoke:
+	$(PYTHON) -m house_price.cli train --smoke
+	$(PYTHON) -m house_price.cli evaluate --smoke
+
+# AC-033: two full train runs in isolated project copies, compared; writes
+# reports/reproducibility/repro_check.json. Pass CONFIG_DIR to use an execution config.
+CONFIG_DIR ?= configs
+repro-check:
+	$(PYTHON) -m house_price.repro --config-dir $(CONFIG_DIR)

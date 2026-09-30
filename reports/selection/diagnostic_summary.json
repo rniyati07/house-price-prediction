@@ -1,0 +1,62 @@
+{
+  "candidate": "blend",
+  "n_rows": 2340,
+  "repeats_per_row": [
+    3
+  ],
+  "overall_log_rmse": 0.10909534067024765,
+  "overall_mean_signed_error": -8.926077968244286e-05,
+  "residual_trend_mean_signed_error_range": [
+    -0.02736328862608481,
+    0.020733953243696396
+  ],
+  "decile_mean_signed_error": {
+    "0": 0.08936184304627261,
+    "1": -0.0020112183479484695,
+    "2": 0.004153916542450263,
+    "3": -0.010808544576131748,
+    "4": -0.011146183674811936,
+    "5": 0.0008008157151855322,
+    "6": 0.009232323285101885,
+    "7": -0.01688422655457015,
+    "8": -0.020346519915945948,
+    "9": -0.04349754615336395
+  },
+  "deciles_with_ci_excluding_zero": [
+    0,
+    7,
+    8,
+    9
+  ],
+  "worst_neighborhood": {
+    "name": "GrnHill",
+    "n": 1,
+    "log_rmse": 0.46084024555576697
+  },
+  "neighborhoods_above_1_5x_overall": [
+    {
+      "name": "GrnHill",
+      "n": 1,
+      "log_rmse": 0.46084024555576697
+    },
+    {
+      "name": "IDOTRR",
+      "n": 73,
+      "log_rmse": 0.24909187436300823
+    },
+    {
+      "name": "Veenker",
+      "n": 20,
+      "log_rmse": 0.177195661494815
+    }
+  ],
+  "files": {
+    "oof_predictions": "oof_predictions.csv",
+    "residual_trend": "residual_trend.csv",
+    "price_decile_bias": "price_decile_bias.csv",
+    "neighborhood_log_rmse": "neighborhood_log_rmse.csv",
+    "residual_plot": "residual_vs_predicted.png",
+    "decile_plot": "price_decile_bias.png",
+    "neighborhood_plot": "neighborhood_log_rmse.png"
+  }
+}

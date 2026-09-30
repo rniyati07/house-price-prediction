@@ -1,6 +1,6 @@
 """Training orchestration: ``house-price train`` / ``make train`` (FR-023, DOC-03 §3.2, §4.2).
 
-At M8 the run is:
+At M9 the run is (``train`` is now complete, DOC-03 §3.2):
 
     load + hash check -> validate -> scope rule -> load the persisted split
     -> generate the shared folds (artifacts/cv/folds.json)
@@ -16,7 +16,15 @@ At M8 the run is:
     -> the DN-07 blend of the better tuned linear model and tuned LightGBM             [M8]
     -> final CV comparison of the 7 candidates on the shared folds, logged to
        hpp-cv-comparison (stage=cv_comparison) with OOF predictions                   [M8]
-    -> stop (selection by the 1-SE rule is M9)
+    -> selection (1-SE rule, tiers, DN-08 tie-break, blend admission), the selection record
+       and the OOF diagnostic report in reports/selection/, logged to hpp-selection; a
+       draft diagnostic_review.yaml that a human must complete (DN-19)                [M9]
+    -> stop (the holdout is only touched by ``evaluate``, M13)
+
+``--smoke`` (DN-17): a stratified sample of the development set with a disjoint holdout
+substitute (development rows; the real holdout is never touched), 2 folds x 1 repeat, minimal
+budgets (validation.yaml ``smoke``), every run in hpp-smoke, every output under
+artifacts/smoke/, RC-02 recorded but not enforced, and an automatic smoke review.
 
 Grid sizes, trial budgets, search spaces (models.yaml) and the folds (validation.yaml) are
 configuration; the canonical files hold the DOC-03 values.
@@ -40,6 +48,7 @@ from typing import Any
 
 import numpy as np
 import pandas as pd
+from sklearn.model_selection import train_test_split
 
 from house_price.config import (
     DEFAULT_CONFIG_DIR,
@@ -57,8 +66,9 @@ from house_price.data.load import load_raw, sha256_file
 from house_price.data.profile import utc_now
 from house_price.data.scope import apply_scope_rule
 from house_price.data.split import create_or_load_split
+from house_price.evaluation import diagnostics
 from house_price.evaluation.cv import CVResult, FoldPlan, generate_folds, run_cv
-from house_price.models import ablation
+from house_price.models import ablation, selection
 from house_price.models.ablation import BranchAblation, OutcomeCheck
 from house_price.models.registry import (
     Candidate,
@@ -92,7 +102,7 @@ FOLDS_PATH = Path("artifacts/cv/folds.json")  # DOC-03 §9.2
 ABLATION_DIR = Path("artifacts/ablation")  # grid tables (gitignored, like artifacts/cv)
 TUNING_DIR = Path("artifacts/tuning")  # <candidate>_best.json, trial history (DOC-03 §10.1)
 COMPARISON_DIR = Path("artifacts/cv_comparison")  # comparison table, OOF predictions
-MILESTONE = "M8"
+MILESTONE = "M9"
 EXIT_RC02_STOP = 3  # train stopped on purpose by the RC-02 ablation check
 
 Log = Callable[[str], None]
@@ -127,11 +137,42 @@ class TrainResult:
     comparison_rows: list[dict[str, Any]] = field(default_factory=list)
     comparison_paths: list[Path] = field(default_factory=list)
     execution_budget: dict[str, Any] = field(default_factory=dict)  # used vs canonical
+    smoke: bool = False
+    smoke_info: dict[str, Any] = field(default_factory=dict)
+    selection_record: dict[str, Any] | None = None  # M9
+    selection_dir: Path | None = None
+    selection_run_id: str | None = None
+    diagnostics_summary: dict[str, Any] = field(default_factory=dict)
 
     @property
     def stopped(self) -> bool:
-        """RC-02 stopped the run before the development checks."""
-        return self.outcome_check is not None and not self.outcome_check.passed
+        """RC-02 stopped the run before the development checks (never in smoke mode)."""
+        return (not self.smoke and self.outcome_check is not None
+                and not self.outcome_check.passed)  # fmt: skip
+
+
+@dataclass(frozen=True)
+class RunPaths:
+    """Where a training run writes. Smoke mode writes everything under artifacts/smoke/."""
+
+    folds: Path
+    e30: Path
+    ablation_dir: Path
+    tuning_dir: Path
+    comparison_dir: Path
+    selection_dir: Path
+    smoke_split: Path | None
+
+    @classmethod
+    def for_mode(cls, root: Path, smoke: bool) -> RunPaths:
+        if smoke:
+            base = root / selection.SMOKE_DIR
+            return cls(base / "cv/folds.json", base / "ablation/E-30_ablation.csv",
+                       base / "ablation", base / "tuning", base / "cv_comparison",
+                       base / "selection", base / selection.SMOKE_SPLIT_NAME)  # fmt: skip
+        return cls(root / FOLDS_PATH, root / ablation.E30_PATH, root / ABLATION_DIR,
+                   root / TUNING_DIR, root / COMPARISON_DIR, root / selection.SELECTION_DIR,
+                   None)  # fmt: skip
 
 
 @dataclass(frozen=True)
@@ -159,26 +200,68 @@ def run_train(
     results_dir: Path | None = None,
     argv: list[str] | None = None,
     log: Log | None = None,
+    smoke: bool = False,
 ) -> TrainResult:
     """Run the training flow, record it, and return what it produced.
 
     An RC-02 stop is a normal return with ``result.stopped`` set (and the record
-    ``stopped``); errors raise.
+    ``stopped``); errors raise. ``smoke=True`` runs the DN-17 smoke configuration.
     """
     root = (root or Path.cwd()).resolve()
     pipeline_run_id = new_pipeline_run_id()
     with start_run(MILESTONE, root=root, results_dir=results_dir, run_id=pipeline_run_id,
                    entry_point="house-price train", argv=argv) as record:  # fmt: skip
         result, provenance = _train(config_dir or root / DEFAULT_CONFIG_DIR, root,
-                                    tracking_uri, pipeline_run_id, log or (lambda _: None))  # fmt: skip
+                                    tracking_uri, pipeline_run_id, log or (lambda _: None),
+                                    smoke)  # fmt: skip
         _record(record, result, provenance)
         if result.stopped and result.outcome_check is not None:
             record.mark_stopped(result.outcome_check.message())
         return replace(result, result_path=record.path)
 
 
+def _smoke_setup(
+    dev: pd.DataFrame, validation: ValidationConfig, models: ModelsConfig, target: str
+) -> tuple[pd.DataFrame, pd.DataFrame, ValidationConfig, ModelsConfig]:
+    """DN-17: a stratified development sample, a disjoint holdout substitute drawn from the
+    remaining development rows, the smoke folds, and the smoke tuning budgets."""
+    spec = validation.smoke
+    if spec is None:
+        raise TrainError("validation.yaml has no 'smoke' section (DN-17)")
+    if len(dev) < spec.sample_rows + spec.holdout_rows:
+        raise TrainError(f"smoke needs {spec.sample_rows + spec.holdout_rows} development rows, "
+                         f"found {len(dev)}")  # fmt: skip
+
+    def bins(frame: pd.DataFrame) -> pd.Series:
+        return pd.qcut(np.log1p(frame[target].astype("float64")), q=validation.n_bins, labels=False)
+
+    sample, rest = train_test_split(dev, train_size=spec.sample_rows, stratify=bins(dev),
+                                    random_state=validation.seed)  # fmt: skip
+    substitute, _ = train_test_split(rest, train_size=spec.holdout_rows, stratify=bins(rest),
+                                     random_state=validation.seed)  # fmt: skip
+    c = models.candidates
+    smoke_models = models.model_copy(update={"candidates": c.model_copy(update={
+        "ridge": c.ridge.model_copy(update={"grid": c.ridge.grid.model_copy(  # type: ignore[union-attr]
+            update={"n": spec.grid_points})}),
+        "lasso": c.lasso.model_copy(update={"grid": c.lasso.grid.model_copy(  # type: ignore[union-attr]
+            update={"n": spec.grid_points})}),
+        "random_forest": c.random_forest.model_copy(update={"n_trials": spec.random_forest_trials}),
+        "lightgbm": c.lightgbm.model_copy(update={"n_trials": spec.lightgbm_trials}),
+    })})  # fmt: skip
+    smoke_validation = validation.model_copy(
+        update={"cv_folds": spec.cv_folds, "cv_repeats": spec.cv_repeats}
+    )
+    return (sample.reset_index(drop=True), substitute.reset_index(drop=True), smoke_validation,
+            smoke_models)  # fmt: skip
+
+
 def _train(
-    config_dir: Path, root: Path, tracking_uri: str | None, pipeline_run_id: str, log: Log
+    config_dir: Path,
+    root: Path,
+    tracking_uri: str | None,
+    pipeline_run_id: str,
+    log: Log,
+    smoke: bool = False,
 ) -> tuple[TrainResult, _Provenance]:
     config = load_project_config(config_dir, root)
     features, models = load_feature_config(config_dir), load_models_config(config_dir)
@@ -193,23 +276,42 @@ def _train(
     in_scope, scope_record = apply_scope_rule(raw, config.data.scope, config.schema.id_column)
     split = create_or_load_split(in_scope, scope_record, config, verify_holdout_file=False)
     dev, validation, schema = split.dev, config.validation, config.schema
+    paths = RunPaths.for_mode(root, smoke)
+    dev_sha256 = split.manifest.dev_sha256
+    smoke_info: dict[str, Any] = {}
+    if smoke:
+        dev, substitute, validation, models = _smoke_setup(dev, validation, models, schema.target)
+        sample_ids = [int(i) for i in dev[schema.id_column]]
+        substitute_ids = [int(i) for i in substitute[schema.id_column]]
+        dev_sha256 = hashlib.sha256(",".join(map(str, sorted(sample_ids))).encode()).hexdigest()
+        smoke_info = {"sample_ids": sample_ids, "holdout_substitute_ids": substitute_ids,
+                      "seed": validation.seed, "source": "development set only (DN-17)",
+                      "budgets": validation.smoke.model_dump() if validation.smoke else None}  # fmt: skip
+        assert paths.smoke_split is not None
+        paths.smoke_split.parent.mkdir(parents=True, exist_ok=True)
+        paths.smoke_split.write_text(json.dumps(smoke_info, indent=2) + "\n", encoding="utf-8")
+        log(f"smoke: {len(sample_ids)}-row development sample, {len(substitute_ids)}-row "
+            f"holdout substitute (disjoint development rows), {validation.cv_folds} x "
+            f"{validation.cv_repeats} folds; every run logged to hpp-smoke")  # fmt: skip
 
     plan = generate_folds(
         dev, id_column=schema.id_column, target=schema.target,
         n_bins=validation.n_bins, n_splits=validation.cv_folds, n_repeats=validation.cv_repeats,
-        seed=validation.seed, dev_sha256=split.manifest.dev_sha256,
+        seed=validation.seed, dev_sha256=dev_sha256,
     )  # fmt: skip
-    folds_path = root / FOLDS_PATH
+    folds_path = paths.folds
     plan.save(folds_path)
-    plan = FoldPlan.load(folds_path, split.manifest.dev_sha256)  # every CV reads the file
+    plan = FoldPlan.load(folds_path, dev_sha256)  # every CV reads the file
 
     commit, dirty = git_state()
     lineage = Lineage(
         pipeline_run_id=pipeline_run_id, git_commit=commit, git_dirty=dirty,
         data_sha256=config.data.raw_sha256, split_manifest_sha256=sha256_file(config.manifest_path),
-        config_hash=training_config_hash(config, features, models), seed=validation.seed,
+        config_hash=config_hash(config.data, validation, config.schema, features, models),
+        seed=validation.seed,
     )  # fmt: skip
-    tracker = Tracker(tracking_uri or default_tracking_uri(root), lineage)
+    tracker = Tracker(tracking_uri or default_tracking_uri(root), lineage,
+                      experiment_override="smoke" if smoke else None)  # fmt: skip
 
     # ---------------------------------------------------------------- M6: baselines
     log("baselines: dummy_median, linear_2feat")
@@ -233,7 +335,7 @@ def _train(
     trained = TrainResult(
         pipeline_run_id=lineage.pipeline_run_id, folds_path=folds_path, results=results,
         run_ids=run_ids, dev_rows=len(dev), dev_log_price_sd=float(np.log1p(target).std(ddof=1)),
-        execution_budget=budget,
+        execution_budget=budget, smoke=smoke, smoke_info=smoke_info,
     )  # fmt: skip
 
     # ------------------------------------------------------------------ M7: ablation
@@ -248,10 +350,10 @@ def _train(
             branch, references[branch], dev, plan, features, schema
         )
     table = ablation.ablation_table(branch_results)
-    table_path = ablation.save_table(table, root / ablation.E30_PATH)
+    table_path = ablation.save_table(table, paths.e30)
     grid_paths = {
         branch: ablation.save_table(
-            result.grid.table(), root / ABLATION_DIR / f"{branch}_{result.reference}_grid.csv"
+            result.grid.table(), paths.ablation_dir / f"{branch}_{result.reference}_grid.csv"
         )
         for branch, result in branch_results.items() if result.grid is not None
     }  # fmt: skip
@@ -266,10 +368,12 @@ def _train(
     )  # fmt: skip
     provenance = _Provenance(lineage, tracker.tracking_uri, config.manifest_path, validation,
                              grid_paths)  # fmt: skip
-    if not check.passed:
+    if not check.passed and not smoke:
         log(check.message())
         return trained, provenance
-    log(check.message())
+    log(check.message() if check.passed else
+        f"{check.message()}\nsmoke mode: RC-02 recorded, not enforced; the committed feature "
+        "sets are used (DN-17)")  # fmt: skip
 
     # ----------------------------------------------------- M7: development checks
     dev_checks: dict[str, CVResult] = {}
@@ -308,12 +412,12 @@ def _train(
     for candidate in candidates.values():
         if candidate.tuning is None:
             continue  # the baselines are not tuned
-        study, parent_id, paths = _tune(
+        study, parent_id, tuned_paths = _tune(
             tracker, candidate, dev, plan, features, schema, validation.seed,
-            root / TUNING_DIR, lineage, folds_sha256, provenance.tracking_uri, log,
+            paths.tuning_dir, lineage, folds_sha256, provenance.tracking_uri, log,
         )  # fmt: skip
         studies[candidate.name], study_run_ids[candidate.name] = study, parent_id
-        tuning_paths[candidate.name] = paths
+        tuning_paths[candidate.name] = tuned_paths
 
     # ------------------------------------------------------- M8: blend + comparison
     spec = models.blend
@@ -330,7 +434,7 @@ def _train(
     comparison: dict[str, CVResult] = {}
     comparison_run_ids: dict[str, str] = {}
     rows: list[dict[str, Any]] = []
-    out = root / COMPARISON_DIR
+    out = paths.comparison_dir
     out.mkdir(parents=True, exist_ok=True)
     comparison_paths: list[Path] = []
     for candidate, overrides, status in finals:
@@ -368,7 +472,57 @@ def _train(
         blend_linear=linear_name, comparison=comparison, comparison_run_ids=comparison_run_ids,
         comparison_rows=rows, comparison_paths=comparison_paths,
     )  # fmt: skip
+
+    # ------------------------------------------------------------------ M9: selection
+    tiers = {c.name: c.tier for c, _, _ in finals}
+    scores = [
+        selection.CandidateScore(name, tiers[name], cv.mean, cv.se, list(cv.fold_scores),
+                                 dict(cv.secondary))
+        for name, cv in comparison.items()
+    ]  # fmt: skip
+    choice = selection.select(scores)
+    best_info = {
+        n: {"best_params": st.best.params,
+            "estimator_params": {**candidates[n].params, **st.best.params}}
+        for n, st in studies.items()
+    }  # fmt: skip
+    record = selection.selection_record(
+        choice, scores, pipeline_run_id=lineage.pipeline_run_id,
+        hyperparameters=selection.hyperparameters_for(choice.selected.name, best_info,
+                                                      linear_name),
+        provenance={
+            "source": "house-price train" + (" --smoke" if smoke else ""), "smoke": smoke,
+            "config_hash": lineage.config_hash,
+            "git": {"commit": lineage.git_commit, "dirty": lineage.git_dirty},
+            "data_sha256": lineage.data_sha256,
+            "split_manifest_sha256": lineage.split_manifest_sha256,
+            "folds_sha256": folds_sha256, "seed": lineage.seed, "execution_budget": budget,
+        },
+    )  # fmt: skip
+    log(f"selection: {choice.selected.name} ({choice.reason})")
+    report = diagnostics.write_report(
+        choice.selected.name, comparison[choice.selected.name].oof, dev, paths.selection_dir,
+        id_column=schema.id_column, target=schema.target,
+    )  # fmt: skip
+    summary = report.summary()
+    record["diagnostic_report"] = {k: _relative(v, root) for k, v in report.paths.items()}
+    selection.write_json(record, paths.selection_dir / selection.RECORD_NAME)
+    selection.write_json(summary, paths.selection_dir / diagnostics.SUMMARY)
+    review = (selection.smoke_review(record["selection_record_id"]) if smoke
+              else selection.draft_review(record["selection_record_id"], summary))  # fmt: skip
+    selection.write_review(review, paths.selection_dir / selection.REVIEW_NAME)
+    selection_run_id = selection.log_selection(tracker, record, paths.selection_dir,
+                                               {"source": "train", "smoke": str(smoke).lower()})  # fmt: skip
+    trained = replace(trained, selection_record=record, selection_dir=paths.selection_dir,
+                      selection_run_id=selection_run_id, diagnostics_summary=summary)  # fmt: skip
     return trained, provenance
+
+
+def _relative(path: Path, root: Path) -> str:
+    try:
+        return path.resolve().relative_to(root.resolve()).as_posix()
+    except ValueError:
+        return path.resolve().as_posix()
 
 
 def _budget(
@@ -651,6 +805,25 @@ def _record(run: ResultRun, result: TrainResult, provenance: _Provenance) -> Non
         })  # fmt: skip
         for path in result.comparison_paths:
             run.log_artifact(path, description="M8 final CV comparison")
+    if result.smoke:
+        run.log_params({"smoke": True})
+        run.log_value("smoke", {k: v for k, v in result.smoke_info.items()
+                                if k not in ("sample_ids", "holdout_substitute_ids")}
+                      | {"n_sample": len(result.smoke_info.get("sample_ids", [])),
+                         "n_holdout_substitute": len(result.smoke_info.get(
+                             "holdout_substitute_ids", []))})  # fmt: skip
+    if result.selection_record is not None and result.selection_dir is not None:
+        rec = result.selection_record
+        run.log_value("selection", {
+            k: rec[k] for k in ("selection_record_id", "best_single", "blend_admitted",
+                                "threshold", "admissible", "one_se_choice", "selected",
+                                "baseline_margins")
+        })  # fmt: skip
+        run.log_value("diagnostics", result.diagnostics_summary)
+        runs[EXPERIMENTS["selection"]] = result.selection_run_id
+        for path in sorted(result.selection_dir.glob("*")):
+            if path.is_file():
+                run.log_artifact(path, description="M9 selection / diagnostics / review")
     run.log_value("mlflow", {
         "tracking_uri": provenance.tracking_uri, "pipeline_run_id": result.pipeline_run_id,
         "runs": runs,
@@ -742,6 +915,30 @@ def report(result: TrainResult) -> str:
         lines += ["", (f"Final CV comparison (hpp-cv-comparison, stage=cv_comparison; blend = "
                        f"{result.blend_linear} + lightgbm; evidence only, no selection)"),
                   *_cv_table(result.comparison)]  # fmt: skip
+    if result.selection_record is not None:
+        rec = result.selection_record
+        best, blend = rec["best_single"], rec["blend_admitted"]
+        review = (
+            "automatic smoke review (DN-17)"
+            if result.smoke
+            else "DRAFT - a human review is required before evaluate (DN-19)"
+        )
+        lines += [
+            "",
+            "Selection (DOC-03 §11.4, §11.5; hpp-selection)",
+            f"  best single: {best['name']} {best['mean']:.6f} (SE {best['se']:.6f})",
+            (
+                f"  blend admitted: {blend['admitted']} (blend {blend['blend_mean']:.6f} vs bar "
+                f"{blend['bar']:.6f})"
+            ),
+            (
+                f"  1-SE threshold: {rec['threshold']['value']:.6f}; admissible: "
+                f"{rec['admissible']}; 1-SE choice: {rec['one_se_choice']}"
+            ),
+            f"  SELECTED: {rec['selected']['name']} ({rec['selected']['reason']})",
+            f"  selection record: {result.selection_dir}",
+            f"  diagnostic_review.yaml: {review}",
+        ]
     if result.result_path is not None:
         lines += ["", f"Run record: {result.result_path}"]
     return "\n".join(lines)

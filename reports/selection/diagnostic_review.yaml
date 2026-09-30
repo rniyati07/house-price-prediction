@@ -1,0 +1,87 @@
+selection_record_id: 81225017-6b18-489b-86d0-d983088eef83
+status: final
+reviewer: NIYATI R
+reviewer_identity_source: git config user.name (the project's commit author)
+reviewed_at: '2026-09-30T16:59:59Z'
+recorded_by: Claude (AI assistant), transcribing the reviewer's stated judgement; the judgement is the
+  reviewer's
+basis: DOC-01 FR-032, IN-10, AC-037; DOC-03 §11.6. No numeric pass/fail threshold is defined for these
+  gates, and none is used here.
+evidence:
+  candidate: blend
+  n_rows: 2340
+  repeats_per_row:
+  - 3
+  overall_log_rmse: 0.10909534067024765
+  overall_mean_signed_error: -8.926077968244286e-05
+  residual_trend_mean_signed_error_range:
+  - -0.02736328862608481
+  - 0.020733953243696396
+  decile_mean_signed_error:
+    0: 0.08936184304627261
+    1: -0.0020112183479484695
+    2: 0.004153916542450263
+    3: -0.010808544576131748
+    4: -0.011146183674811936
+    5: 0.0008008157151855322
+    6: 0.009232323285101885
+    7: -0.01688422655457015
+    8: -0.020346519915945948
+    9: -0.04349754615336395
+  deciles_with_ci_excluding_zero:
+  - 0
+  - 7
+  - 8
+  - 9
+  worst_neighborhood:
+    name: GrnHill
+    n: 1
+    log_rmse: 0.46084024555576697
+  neighborhoods_above_1_5x_overall:
+  - name: GrnHill
+    n: 1
+    log_rmse: 0.46084024555576697
+  - name: IDOTRR
+    n: 73
+    log_rmse: 0.24909187436300823
+  - name: Veenker
+    n: 20
+    log_rmse: 0.177195661494815
+  files:
+    oof_predictions: oof_predictions.csv
+    residual_trend: residual_trend.csv
+    price_decile_bias: price_decile_bias.csv
+    neighborhood_log_rmse: neighborhood_log_rmse.csv
+    residual_plot: residual_vs_predicted.png
+    decile_plot: price_decile_bias.png
+    neighborhood_plot: neighborhood_log_rmse.png
+gates:
+  residual_pattern:
+    result: pass
+    reasoning: 'Residuals vs predicted (residual_vs_predicted.png, residual_trend.csv): the binned mean
+      signed log error stays within about -0.027 to +0.021 across all 20 prediction bins, without a material
+      systematic trend against the predicted value. Spread is wider at the low end of the prediction range,
+      with a few large over-predictions of cheap houses.'
+  price_decile_bias:
+    result: pass
+    reasoning: 'Observed limitation (price_decile_bias.png/.csv): the actual-price deciles show end-of-range
+      shrinkage. The cheapest decile has a mean signed log error of about +0.089 (over-prediction) and
+      the most expensive about -0.043 (under-prediction), with smaller deviations in the middle deciles
+      (deciles 7-8 about -0.017 and -0.020). This pattern exists and is recorded as a known limitation.
+      The source-of-truth documents define no operational threshold for calling it ''systematic bias''
+      (IN-10: no numeric threshold is invented), and the predicted-price-binned diagnostic of gate (a)
+      stays near zero. Reviewer judgement: the available OOF evidence does not establish a documented
+      gate failure. A confidence interval excluding zero is not used as a failure rule.'
+  neighborhood_error:
+    result: pass
+    reasoning: 'Neighborhood log-RMSE (neighborhood_log_rmse.png/.csv), overall OOF log-RMSE 0.109. GrnHill
+      has n=1 and a high error (about 0.46); a single house is not interpretable (small-count caveat,
+      DOC-03 §11.6). IDOTRR (n=73) has elevated error around 0.249 and Veenker (n=20) around 0.177. These
+      are recorded as known limitations / diagnostic observations; no numeric neighborhood threshold is
+      invented. Reviewer judgement: no documented gate failure.'
+known_limitations:
+- 'End-of-range shrinkage by actual price decile: cheapest decile about +0.089, most expensive about -0.043
+  mean signed log error (OOF, development set).'
+- 'Elevated neighborhood error: IDOTRR (n=73) about 0.249, Veenker (n=20) about 0.177; GrnHill (n=1) not
+  interpretable.'
+- Wider residual spread at the low end of the prediction range.

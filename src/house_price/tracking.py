@@ -53,6 +53,9 @@ STANDARD_TAGS = (
 STAGES = ("baselines", "ablation", "development_check", "tuning", "cv_comparison", "selection",
           "evaluation", "release", "smoke")  # fmt: skip
 PARENT_TAG = "mlflow.parentRunId"  # MLflow's own tag for nested runs
+# DOC-03 §14.3: the run_kind tag of evaluation runs.
+RUN_KINDS = ("final_holdout_evaluation", "baseline_reference", "temporal_diagnostic",
+             "quality_gates", "production_refit")  # fmt: skip
 
 _SHA256 = re.compile(r"^[0-9a-f]{64}$")
 _GIT_SHA = re.compile(r"^[0-9a-f]{40}$")
@@ -158,17 +161,25 @@ class TrackedRun:
 class Tracker:
     """Opens runs in the project's experiments, always with the standard tags."""
 
-    def __init__(self, tracking_uri: str, lineage: Lineage):
+    def __init__(self, tracking_uri: str, lineage: Lineage, experiment_override: str | None = None):
+        """``experiment_override`` sends every run to one experiment: smoke mode logs
+        everything to ``hpp-smoke`` (DN-17), isolated from real results."""
+        if experiment_override is not None and experiment_override not in EXPERIMENTS:
+            raise TrackingError(f"unknown experiment {experiment_override!r}")
         self.tracking_uri = tracking_uri
         self.lineage = lineage
+        self.experiment_override = experiment_override
         self.client = MlflowClient(tracking_uri=tracking_uri)
 
-    def experiment_id(self, key: str) -> str:
+    def experiment_name(self, key: str) -> str:
         if key not in EXPERIMENTS:
             raise TrackingError(
                 f"unknown experiment {key!r}; expected one of {sorted(EXPERIMENTS)}"
             )
-        name = EXPERIMENTS[key]
+        return EXPERIMENTS[self.experiment_override or key]
+
+    def experiment_id(self, key: str) -> str:
+        name = self.experiment_name(key)
         experiment = self.client.get_experiment_by_name(name)
         return experiment.experiment_id if experiment else self.client.create_experiment(name)
 
@@ -181,6 +192,8 @@ class Tracker:
         candidate: str,
         run_name: str | None = None,
         parent_run_id: str | None = None,
+        run_kind: str | None = None,
+        extra_tags: Mapping[str, str] | None = None,
     ) -> Iterator[TrackedRun]:
         """Open a tagged run; it ends FINISHED, or FAILED if the block raises.
 
@@ -192,6 +205,13 @@ class Tracker:
         tags = {**self.lineage.tags(), "stage": stage, "candidate": candidate}
         if parent_run_id is not None:
             tags[PARENT_TAG] = parent_run_id
+        if run_kind is not None:
+            if run_kind not in RUN_KINDS:
+                raise TrackingError(f"unknown run_kind {run_kind!r}; expected one of {RUN_KINDS}")
+            tags["run_kind"] = run_kind
+        if self.experiment_override is not None:
+            tags["experiment_override"] = self.experiment_override
+        tags.update(extra_tags or {})
         run = self.client.create_run(self.experiment_id(experiment), tags=tags, run_name=run_name)
         tracked = TrackedRun(self.client, run.info.run_id)
         try:

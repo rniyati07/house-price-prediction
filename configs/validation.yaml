@@ -7,3 +7,16 @@ cv_folds: 5                       # ADR-09 / DN-03 (used from M6)
 cv_repeats: 3                     # ADR-09 / DN-03 (used from M6)
 reproducibility_tolerance: 1.0e-6 # AC-033 (used from M9)
 split_balance_tolerance_pp: 2.0   # IN-07 / AC-009: max per-bin share difference
+
+# Smoke training (DN-17, DOC-03 §16.3; M9): `house-price train --smoke` / `evaluate --smoke`.
+# A stratified sample of the development set, a disjoint holdout substitute drawn from the
+# remaining development rows (the real holdout is never touched), 2 folds x 1 repeat, and
+# minimal tuning budgets. Never used for the real decision; never releasable.
+smoke:
+  sample_rows: 200
+  holdout_rows: 100
+  cv_folds: 2
+  cv_repeats: 1
+  grid_points: 3
+  random_forest_trials: 2
+  lightgbm_trials: 3

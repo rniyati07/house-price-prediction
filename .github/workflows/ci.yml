@@ -1,0 +1,73 @@
+# CI (DOC-05 §5.5, RC-04; DOC-03 §16.3 DN-17): lint -> typecheck -> test -> smoke-train.
+#
+# CI has no dataset: tests marked `data` are skipped, and the smoke-train stage runs on the
+# committed synthetic fixture (tests/fixtures/synthetic_raw.csv) in an isolated project, so
+# the real holdout never exists here. Dependencies come from requirements.txt (there is no
+# uv lockfile; see the AC-033 note in reports/reproducibility/repro_check.json).
+name: ci
+
+on:
+  push:
+  pull_request:
+
+env:
+  PYTHON_VERSION: "3.12" # DOC-03 §10.7
+  MLFLOW_ALLOW_FILE_STORE: "true"
+
+jobs:
+  lint:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+          cache: pip
+      - run: pip install -r requirements.txt && pip install -e .
+      - run: ruff check src tests
+      - run: ruff format --check src tests
+
+  typecheck:
+    needs: lint
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+          cache: pip
+      - run: pip install -r requirements.txt && pip install -e .
+      - run: mypy src
+
+  test:
+    needs: typecheck
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+          cache: pip
+      - run: pip install -r requirements.txt && pip install -e .
+      - run: pytest -q
+
+  smoke-train:
+    needs: test
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+          cache: pip
+      - run: pip install -r requirements.txt && pip install -e .
+      - name: Prepare an isolated smoke project from the synthetic fixture
+        run: python -m tests.fixtures.synthetic prepare "$RUNNER_TEMP/smoke"
+      - name: Create the split (synthetic data)
+        run: python -m house_price.data.split --root "$RUNNER_TEMP/smoke" --config-dir "$RUNNER_TEMP/smoke/configs"
+      - name: Remove the holdout file (smoke never reads a holdout)
+        run: rm "$RUNNER_TEMP/smoke/data/processed/holdout.csv"
+      - name: train --smoke
+        run: house-price train --smoke --root "$RUNNER_TEMP/smoke"
+      - name: evaluate --smoke
+        run: house-price evaluate --smoke --root "$RUNNER_TEMP/smoke"

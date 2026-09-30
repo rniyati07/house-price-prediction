@@ -200,7 +200,7 @@ def _fake_cv(means: list[float], maes: list[float]) -> Callable[..., CVResult]:
 
 
 def _small(candidate: Candidate, **update: object) -> Candidate:
-    return replace(candidate, **update)
+    return replace(candidate, **update)  # type: ignore[arg-type]
 
 
 def test_objective_is_the_mean_log_rmse_not_a_secondary_metric(
@@ -230,7 +230,7 @@ def test_grid_study_reuses_the_shared_folds_and_flags_edges(
         monkeypatch.setattr(tuning, "run_cv", fake)
         seen: list[int] = []
         study = tuning.run_grid_study(small, dev, plan, features, schema,
-                                      on_trial=lambda t, seen=seen: seen.append(t.number))  # fmt: skip
+                                      on_trial=lambda t, seen=seen: seen.append(t.number))  # type: ignore[misc]  # fmt: skip
         assert study.edge_warning is edge and study.params_at_bounds is None
         assert seen == [0, 1, 2] and all(p is plan for p in fake.calls)  # type: ignore[attr-defined]
         assert [t.params["alpha"] for t in study.trials] == grid_values(small.grid)  # type: ignore[arg-type]
