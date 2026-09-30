@@ -5,6 +5,12 @@
 # candidates with their fixed settings and reference configurations, and the ablation
 # references. M8 adds the search spaces, budgets, and the blend.
 #
+# CANONICAL VALUES. The grids (25 points), trial budgets (Random Forest 30, LightGBM 100)
+# and search spaces below are the DOC-03 §10 / DN-06 values. Together with validation.yaml
+# (5 folds x 3 repeats) they are the full M8 configuration. Reduced development or smoke
+# runs use a separate copy of the configs directory (house-price train --config-dir ...
+# --root <isolated project>), never an edit of these files.
+#
 # The global seed (validation.yaml, DN-02) is passed to every seeded estimator as
 # random_state by the registry; it is not repeated here.
 
@@ -48,6 +54,14 @@ candidates:
     tier: 2
     tuning: optuna
     fixed: {n_jobs: -1, bootstrap: true}
+    # DOC-03 §10.5: Optuna TPE (seed from validation.yaml), 30 trials.
+    n_trials: 30
+    search_space:
+      n_estimators: {type: int, low: 100, high: 600}
+      max_depth: {type: int, low: 6, high: 30}
+      min_samples_split: {type: int, low: 2, high: 20}
+      min_samples_leaf: {type: int, low: 1, high: 10}
+      max_features: {type: float, low: 0.2, high: 1.0}
 
   # DOC-03 §8.7; determinism settings DN-14 (§10.6); reference parameters DOC-03 §6.6.
   lightgbm:
@@ -55,6 +69,18 @@ candidates:
     tier: 3
     tuning: optuna
     fixed: {deterministic: true, force_row_wise: true, n_jobs: 1, verbose: -1}
+    # DOC-03 §10.6 (ADR-13): Optuna TPE (seed from validation.yaml), exactly 100 trials.
+    # subsample_freq stays 1 (from reference) so that bagging is active.
+    n_trials: 100
+    search_space:
+      learning_rate: {type: float, low: 0.01, high: 0.2, log: true}
+      num_leaves: {type: int, low: 8, high: 64}
+      min_child_samples: {type: int, low: 5, high: 50}
+      n_estimators: {type: int, low: 200, high: 2000}
+      subsample: {type: float, low: 0.5, high: 1.0}
+      colsample_bytree: {type: float, low: 0.3, high: 1.0}
+      reg_alpha: {type: float, low: 1.0e-8, high: 10.0, log: true}
+      reg_lambda: {type: float, low: 1.0e-8, high: 10.0, log: true}
     reference:
       learning_rate: 0.05
       n_estimators: 600
@@ -69,4 +95,11 @@ candidates:
 # Feature-ablation reference model per branch (DOC-03 §6.6, DN-05).
 ablation:
   linear: ridge
+  tree: lightgbm
+
+# The DN-07 blend (DOC-03 §8.8): equal weights (0.5/0.5, fixed in code), averaged in log
+# space; the linear component is whichever of these has the lower tuned mean CV log-RMSE.
+blend:
+  tier: 4
+  linear: [ridge, lasso]
   tree: lightgbm

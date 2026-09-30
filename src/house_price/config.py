@@ -300,20 +300,56 @@ class GridConfig(StrictModel):
         return self
 
 
+class SearchParam(StrictModel):
+    """One Optuna search dimension (DOC-03 §10.5, §10.6, DN-06)."""
+
+    type: Literal["int", "float"]
+    low: float
+    high: float
+    log: bool = False
+
+    @model_validator(mode="after")
+    def _check_range(self) -> SearchParam:
+        if self.low >= self.high:
+            raise ValueError(f"search range low {self.low} must be below high {self.high}")
+        if self.type == "int" and not (
+            float(self.low).is_integer() and float(self.high).is_integer()
+        ):
+            raise ValueError("integer search bounds must be whole numbers")
+        if self.log and self.low <= 0:
+            raise ValueError("a log-scaled search range must be positive")
+        return self
+
+
 class CandidateConfig(StrictModel):
-    """One model candidate (DOC-03 §8.1, §8.4 to §8.7).
+    """One model candidate (DOC-03 §8.1, §8.4 to §8.7, §10).
 
     ``fixed`` settings never change; ``reference`` is the configuration used for the M7
     ablation and development check. The global seed (``validation.yaml``, DN-02) is passed
-    to the estimator by the registry and is not repeated here.
+    to the estimator by the registry and is not repeated here. The tuning budget is
+    configuration: ``grid.n`` points for a grid, ``n_trials`` over ``search_space`` for an
+    Optuna study (M8).
     """
 
     branch: Literal["linear", "tree"]
     tier: int = Field(ge=1)
     tuning: Literal["grid", "optuna"]
     grid: GridConfig | None = None
+    n_trials: int | None = Field(default=None, ge=1)
+    search_space: dict[str, SearchParam] | None = None
     fixed: dict[str, ParamValue] = Field(default_factory=dict)
     reference: dict[str, ParamValue] = Field(default_factory=dict)
+
+    @model_validator(mode="after")
+    def _check_tuning(self) -> CandidateConfig:
+        if self.tuning == "grid" and (self.grid is None or self.search_space or self.n_trials):
+            raise ValueError("a grid candidate needs 'grid' and no 'search_space'/'n_trials'")
+        if self.tuning == "optuna" and (not self.search_space or self.n_trials is None):
+            raise ValueError("an Optuna candidate needs 'search_space' and 'n_trials'")
+        overlap = sorted(set(self.search_space or {}) & set(self.fixed))
+        if overlap:
+            raise ValueError(f"fixed settings cannot also be searched: {overlap}")
+        return self
 
 
 class CandidatesConfig(StrictModel):
@@ -330,13 +366,26 @@ class AblationConfig(StrictModel):
     tree: Literal["lightgbm"]
 
 
+class BlendConfig(StrictModel):
+    """The DN-07 blend (DOC-03 §8.8): the better tuned linear candidate plus LightGBM.
+
+    Weights are fixed at 0.5/0.5 by DN-07 and live in code, not configuration.
+    """
+
+    tier: int = Field(ge=1)
+    linear: list[Literal["ridge", "lasso"]] = Field(min_length=1)
+    tree: Literal["lightgbm"]
+
+
 class ModelsConfig(StrictModel):
     """``models.yaml``: candidate definitions (DOC-03 §5.1, §8). M6 defines the baselines;
-    M7 adds the four candidates and the ablation references."""
+    M7 adds the four candidates and the ablation references; M8 the search spaces, trial
+    budgets, and the blend."""
 
     baselines: BaselinesConfig
     candidates: CandidatesConfig
     ablation: AblationConfig
+    blend: BlendConfig
 
 
 # ------------------------------------------------------------------------------ loading

@@ -10,12 +10,19 @@ from __future__ import annotations
 import numpy as np
 import pytest
 from lightgbm import LGBMRegressor
-from sklearn.ensemble import RandomForestRegressor
+from sklearn.ensemble import RandomForestRegressor, VotingRegressor
 from sklearn.linear_model import Lasso, Ridge
 from sklearn.preprocessing import OneHotEncoder, OrdinalEncoder
 
 from house_price.config import ConfigError, ModelsConfig, load_models_config
-from house_price.models.registry import model_candidates, registry
+from house_price.models.registry import (
+    BLEND,
+    BLEND_WEIGHTS,
+    BOTH,
+    blend_candidate,
+    model_candidates,
+    registry,
+)
 from tests.conftest import CONFIG_DIR, ModelData
 
 SEED = 42
@@ -152,3 +159,34 @@ def test_invalid_candidate_config_is_refused(tmp_path: object) -> None:
     path.write_text(yaml.safe_dump(data), encoding="utf-8")
     with pytest.raises(ConfigError, match="branch"):
         load_models_config(env.config_dir)
+
+
+# ------------------------------------------------------------------ M8: DN-07 blend
+
+
+def test_blend_averages_the_two_tuned_pipelines_in_log_space(
+    models: ModelsConfig, model_data: ModelData
+) -> None:
+    """M8-5 / DN-07: fixed 0.5/0.5 weights, averaged in log space (never fitted, never in
+    dollars); each component keeps its own tuned parameters and branch preprocessing."""
+    c = registry(models, SEED)
+    ridge_params, lgbm_params = {"alpha": 10.0}, {"n_estimators": 50, "num_leaves": 8}
+    blend = blend_candidate(c["ridge"], ridge_params, c["lightgbm"], lgbm_params, tier=4)
+    assert (blend.name, blend.tier, blend.branch) == (BLEND, 4, BOTH)
+    assert blend.params["weights"] == [0.5, 0.5] == list(BLEND_WEIGHTS)
+    X, y = model_data.X, model_data.y
+    model = blend.build(model_data.features, model_data.schema).fit(X, y)
+    voting = model.regressor_
+    assert isinstance(voting, VotingRegressor) and voting.weights == [0.5, 0.5]
+    assert model.func is np.log1p and model.inverse_func is np.expm1
+    ridge = c["ridge"].build(model_data.features, model_data.schema, ridge_params).fit(X, y)
+    lgbm = c["lightgbm"].build(model_data.features, model_data.schema, lgbm_params).fit(X, y)
+    log_mean = 0.5 * np.log1p(ridge.predict(X)) + 0.5 * np.log1p(lgbm.predict(X))
+    np.testing.assert_allclose(model.predict(X), np.expm1(log_mean), rtol=1e-9)
+    dollar_mean = 0.5 * ridge.predict(X) + 0.5 * lgbm.predict(X)
+    assert not np.allclose(model.predict(X), dollar_mean)  # not a dollar-space average
+    members = dict(voting.estimators)
+    assert members["ridge"].named_steps["model"].alpha == 10.0
+    assert members["lightgbm"].named_steps["model"].n_estimators == 50
+    with pytest.raises(ValueError, match="fixed baseline"):
+        blend.build(model_data.features, model_data.schema, {"weights": [0.7, 0.3]})

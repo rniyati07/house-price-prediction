@@ -1,6 +1,6 @@
 """Training orchestration: ``house-price train`` / ``make train`` (FR-023, DOC-03 §3.2, §4.2).
 
-At M7 the run is:
+At M8 the run is:
 
     load + hash check -> validate -> scope rule -> load the persisted split
     -> generate the shared folds (artifacts/cv/folds.json)
@@ -11,24 +11,35 @@ At M7 the run is:
     -> development check of Ridge, Lasso, Random Forest, LightGBM with their reference
        configurations on the committed feature sets, logged to hpp-cv-comparison
        (stage=development_check; never used for selection)                          [M7]
-    -> stop (tuning and the final comparison are M8)
+    -> tuning of Ridge and Lasso (grid) and Random Forest and LightGBM (Optuna TPE), each
+       grid point / trial a nested run in hpp-tuning; artifacts/tuning/<name>_best.json [M8]
+    -> the DN-07 blend of the better tuned linear model and tuned LightGBM             [M8]
+    -> final CV comparison of the 7 candidates on the shared folds, logged to
+       hpp-cv-comparison (stage=cv_comparison) with OOF predictions                   [M8]
+    -> stop (selection by the 1-SE rule is M9)
 
-Each run writes one run record (``results/M7/.../result.json``) whose ``run_id`` is the
+Grid sizes, trial budgets, search spaces (models.yaml) and the folds (validation.yaml) are
+configuration; the canonical files hold the DOC-03 values.
+
+Each run writes one run record (``results/M8/.../result.json``) whose ``run_id`` is the
 ``pipeline_run_id`` tagged on every MLflow run; it summarizes the stages and links to their
 MLflow runs. An RC-02 stop is recorded as ``stopped``, not ``failed``.
 
 The split is only loaded: if the manifest is missing, training stops instead of creating
-one. Only the development set is used; the holdout rows are never read here.
+one. Only the development set is used; the holdout file is never opened (AC-030).
 """
 
 from __future__ import annotations
 
+import hashlib
+import json
 from collections.abc import Callable
 from dataclasses import dataclass, field, replace
 from pathlib import Path
 from typing import Any
 
 import numpy as np
+import pandas as pd
 
 from house_price.config import (
     DEFAULT_CONFIG_DIR,
@@ -43,14 +54,30 @@ from house_price.config import (
 )
 from house_price.data.errors import DataError
 from house_price.data.load import load_raw, sha256_file
+from house_price.data.profile import utc_now
 from house_price.data.scope import apply_scope_rule
 from house_price.data.split import create_or_load_split
 from house_price.evaluation.cv import CVResult, FoldPlan, generate_folds, run_cv
 from house_price.models import ablation
 from house_price.models.ablation import BranchAblation, OutcomeCheck
-from house_price.models.registry import Candidate, baseline_candidates, registry
+from house_price.models.registry import (
+    Candidate,
+    baseline_candidates,
+    blend_candidate,
+    registry,
+)
+from house_price.models.tuning import (
+    N_JOBS,
+    PRUNER,
+    SAMPLER,
+    StudyResult,
+    Trial,
+    budget_deviations,
+    execution_budget,
+    run_study,
+)
 from house_price.pipelines.branches import BRANCHES
-from house_price.results import ResultRun, start_run
+from house_price.results import ResultRun, jsonable, start_run
 from house_price.tracking import (
     EXPERIMENTS,
     Lineage,
@@ -63,7 +90,9 @@ from house_price.tracking import (
 
 FOLDS_PATH = Path("artifacts/cv/folds.json")  # DOC-03 §9.2
 ABLATION_DIR = Path("artifacts/ablation")  # grid tables (gitignored, like artifacts/cv)
-MILESTONE = "M7"
+TUNING_DIR = Path("artifacts/tuning")  # <candidate>_best.json, trial history (DOC-03 §10.1)
+COMPARISON_DIR = Path("artifacts/cv_comparison")  # comparison table, OOF predictions
+MILESTONE = "M8"
 EXIT_RC02_STOP = 3  # train stopped on purpose by the RC-02 ablation check
 
 Log = Callable[[str], None]
@@ -89,6 +118,15 @@ class TrainResult:
     dev_checks: dict[str, CVResult] = field(default_factory=dict)
     dev_check_run_ids: dict[str, str] = field(default_factory=dict)
     dev_check_params: dict[str, dict[str, Any]] = field(default_factory=dict)
+    studies: dict[str, StudyResult] = field(default_factory=dict)  # M8 tuning
+    study_run_ids: dict[str, str] = field(default_factory=dict)  # hpp-tuning parent runs
+    tuning_paths: dict[str, list[Path]] = field(default_factory=dict)  # _best.json, trials
+    blend_linear: str | None = None  # the linear component chosen for the blend
+    comparison: dict[str, CVResult] = field(default_factory=dict)  # the 7 final CV runs
+    comparison_run_ids: dict[str, str] = field(default_factory=dict)
+    comparison_rows: list[dict[str, Any]] = field(default_factory=list)
+    comparison_paths: list[Path] = field(default_factory=list)
+    execution_budget: dict[str, Any] = field(default_factory=dict)  # used vs canonical
 
     @property
     def stopped(self) -> bool:
@@ -144,6 +182,7 @@ def _train(
 ) -> tuple[TrainResult, _Provenance]:
     config = load_project_config(config_dir, root)
     features, models = load_feature_config(config_dir), load_models_config(config_dir)
+    budget = _budget(config_dir, root, models, config.validation)
     if not config.manifest_path.is_file():
         raise TrainError(
             f"split manifest not found at {config.manifest_path}; create the split first "
@@ -152,7 +191,7 @@ def _train(
 
     raw = load_raw(config)
     in_scope, scope_record = apply_scope_rule(raw, config.data.scope, config.schema.id_column)
-    split = create_or_load_split(in_scope, scope_record, config)
+    split = create_or_load_split(in_scope, scope_record, config, verify_holdout_file=False)
     dev, validation, schema = split.dev, config.validation, config.schema
 
     plan = generate_folds(
@@ -194,6 +233,7 @@ def _train(
     trained = TrainResult(
         pipeline_run_id=lineage.pipeline_run_id, folds_path=folds_path, results=results,
         run_ids=run_ids, dev_rows=len(dev), dev_log_price_sd=float(np.log1p(target).std(ddof=1)),
+        execution_budget=budget,
     )  # fmt: skip
 
     # ------------------------------------------------------------------ M7: ablation
@@ -203,7 +243,7 @@ def _train(
     branch_results: dict[str, BranchAblation] = {}
     for branch in BRANCHES:
         log(f"ablation ({branch} branch, reference {references[branch].name}): "
-            f"full feature set + {len(features.engineered)} leave-one-out runs x 15 folds")  # fmt: skip
+            f"full feature set + {len(features.engineered)} leave-one-out runs x {len(plan.folds)} folds")  # fmt: skip
         branch_results[branch] = ablation.run_branch_ablation(
             branch, references[branch], dev, plan, features, schema
         )
@@ -259,7 +299,193 @@ def _train(
         dev_params[candidate.name] = {k: _plain(v) for k, v in effective.items()}
     trained = replace(trained, dev_checks=dev_checks, dev_check_run_ids=dev_run_ids,
                       dev_check_params=dev_params)  # fmt: skip
+
+    # ------------------------------------------------------------------- M8: tuning
+    folds_sha256 = sha256_file(folds_path)
+    studies: dict[str, StudyResult] = {}
+    study_run_ids: dict[str, str] = {}
+    tuning_paths: dict[str, list[Path]] = {}
+    for candidate in candidates.values():
+        if candidate.tuning is None:
+            continue  # the baselines are not tuned
+        study, parent_id, paths = _tune(
+            tracker, candidate, dev, plan, features, schema, validation.seed,
+            root / TUNING_DIR, lineage, folds_sha256, provenance.tracking_uri, log,
+        )  # fmt: skip
+        studies[candidate.name], study_run_ids[candidate.name] = study, parent_id
+        tuning_paths[candidate.name] = paths
+
+    # ------------------------------------------------------- M8: blend + comparison
+    spec = models.blend
+    linear_name = min(
+        spec.linear, key=lambda n: (studies[n].best.result.mean, spec.linear.index(n))
+    )
+    blend = blend_candidate(candidates[linear_name], studies[linear_name].best.params,
+                            candidates[spec.tree], studies[spec.tree].best.params, spec.tier)  # fmt: skip
+    finals: list[tuple[Candidate, dict[str, Any], str]] = [
+        *[(c, {}, "baseline (not tuned)") for c in baseline_candidates(models)],
+        *[(candidates[n], studies[n].best.params, "tuned") for n in studies],
+        (blend, {}, f"DN-07 blend of tuned {linear_name} + tuned {spec.tree}"),
+    ]
+    comparison: dict[str, CVResult] = {}
+    comparison_run_ids: dict[str, str] = {}
+    rows: list[dict[str, Any]] = []
+    out = root / COMPARISON_DIR
+    out.mkdir(parents=True, exist_ok=True)
+    comparison_paths: list[Path] = []
+    for candidate, overrides, status in finals:
+        log(f"final CV comparison: {candidate.name}")
+        result = run_cv(candidate.build(features, schema, overrides), dev, plan, schema)
+        oof_path = out / f"{candidate.name}_oof.csv"
+        result.oof.to_csv(oof_path, index=False, lineterminator="\n")
+        with tracker.run("cv_comparison", stage="cv_comparison", candidate=candidate.name,
+                         run_name=f"{candidate.name}_cv_comparison") as run:  # fmt: skip
+            run.log_params({
+                **{k: _param(v) for k, v in {**candidate.params, **overrides}.items()},
+                "branch": candidate.branch, "tier": candidate.tier, "status": status,
+                "engineered_features": ",".join(candidate.engineered_features(features)) or "none",
+                "n_folds": validation.cv_folds, "n_repeats": validation.cv_repeats,
+                "eligible_for_selection": candidate.eligible,
+            })  # fmt: skip
+            _log_cv_metrics(run, result)
+            run.log_artifact(oof_path)
+        comparison[candidate.name], comparison_run_ids[candidate.name] = result, run.run_id
+        comparison_paths.append(oof_path)
+        tuned = studies.get(candidate.name)
+        rows.append({
+            "candidate": candidate.name, "tier": candidate.tier, "status": status,
+            "branch": candidate.branch, "cv_mean": result.mean, "cv_se": result.se,
+            **result.secondary,
+            "tuning_best_cv_mean": None if tuned is None else tuned.best.result.mean,
+            "mlflow_run_id": run.run_id,
+            **{f"fold_{i:02d}": s for i, s in enumerate(result.fold_scores, start=1)},
+        })  # fmt: skip
+    table_path = out / "comparison.csv"
+    pd.DataFrame(rows).to_csv(table_path, index=False, lineterminator="\n")
+    comparison_paths.insert(0, table_path)
+    trained = replace(
+        trained, studies=studies, study_run_ids=study_run_ids, tuning_paths=tuning_paths,
+        blend_linear=linear_name, comparison=comparison, comparison_run_ids=comparison_run_ids,
+        comparison_rows=rows, comparison_paths=comparison_paths,
+    )  # fmt: skip
     return trained, provenance
+
+
+def _budget(
+    config_dir: Path, root: Path, models: ModelsConfig, validation: ValidationConfig
+) -> dict[str, Any]:
+    """The run's tuning budget and, when ``--config-dir`` is not the project's own
+    ``configs/``, its differences from that canonical configuration (e.g. an approved
+    reduced trial budget). Nothing is changed; the difference is only recorded."""
+    used = execution_budget(models, validation)
+    canonical_dir = root / DEFAULT_CONFIG_DIR
+    info: dict[str, Any] = {"config_dir": str(config_dir), "used": used,
+                            "canonical_config_dir": str(canonical_dir), "deviations": []}  # fmt: skip
+    if (
+        canonical_dir.resolve() != config_dir.resolve()
+        and (canonical_dir / "models.yaml").is_file()
+    ):
+        canonical = execution_budget(load_models_config(canonical_dir),
+                                     load_project_config(canonical_dir, root).validation)  # fmt: skip
+        info["canonical"] = canonical
+        info["deviations"] = budget_deviations(used, canonical)
+    return info
+
+
+def _param(value: Any) -> Any:
+    """An MLflow parameter value: nested structures as sorted JSON."""
+    return json.dumps(jsonable(value), sort_keys=True) if isinstance(value, (dict, list)) else value
+
+
+def _tune(
+    tracker: Tracker,
+    candidate: Candidate,
+    dev: pd.DataFrame,
+    plan: FoldPlan,
+    features: FeatureConfig,
+    schema: Any,
+    seed: int,
+    out_dir: Path,
+    lineage: Lineage,
+    folds_sha256: str,
+    tracking_uri: str,
+    log: Log,
+) -> tuple[StudyResult, str, list[Path]]:
+    """One tuning study: a parent run in hpp-tuning and one nested run per grid point or
+    trial (DOC-03 §10.1, §10.8); writes ``<candidate>_best.json`` and the trial history."""
+    kind = "grid point" if candidate.tuning == "grid" else "trial"
+    budget = candidate.grid.n if candidate.grid is not None else candidate.n_trials
+    log(f"tuning {candidate.name} ({candidate.tuning}): {budget} {kind}s x "
+        f"{len(plan.folds)} folds")  # fmt: skip
+    child_ids: list[str] = []
+    with tracker.run("tuning", stage="tuning", candidate=candidate.name,
+                     run_name=f"tuning_{candidate.name}") as parent:  # fmt: skip
+
+        def on_trial(trial: Trial) -> None:
+            with tracker.run("tuning", stage="tuning", candidate=candidate.name,
+                             run_name=f"{candidate.name}_{kind.replace(' ', '_')}_{trial.number:03d}",
+                             parent_run_id=parent.run_id) as child:  # fmt: skip
+                child.log_params({**trial.params, "trial_number": trial.number,
+                                  "tuning_method": candidate.tuning})  # fmt: skip
+                _log_cv_metrics(child, trial.result)
+            child_ids.append(child.run_id)
+            log(f"  {candidate.name} {kind} {trial.number + 1}/{budget}: mean "
+                f"{trial.result.mean:.5f} ({trial.result.duration_seconds:.1f} s)")  # fmt: skip
+
+        study = run_study(candidate, dev, plan, features, schema, seed, on_trial)
+        best = study.best
+        optuna = study.method == "optuna"
+        parent.log_params({
+            "tuning_method": study.method, "n_trials": len(study.trials),
+            "n_folds": len(plan.folds), "search_space": _param(study.search_space),
+            "sampler": SAMPLER if optuna else "grid", "seed": seed if optuna else "n/a",
+            "direction": "minimize", "pruner": PRUNER, "n_jobs": N_JOBS,
+            "best_trial_number": best.number,
+            **{f"best_{k}": v for k, v in best.params.items()},
+        })  # fmt: skip
+        parent.log_metrics({
+            "best_cv_mean": best.result.mean, "best_cv_se": best.result.se,
+            **{f"best_{k}": v for k, v in best.result.secondary.items()},
+            "duration_seconds": study.duration_seconds,
+        })  # fmt: skip
+        if study.edge_warning is not None:
+            parent.set_tag("edge_warning", study.edge_warning)
+        out_dir.mkdir(parents=True, exist_ok=True)
+        best_path = out_dir / f"{candidate.name}_best.json"
+        payload = {
+            "candidate": candidate.name, "tuning_method": study.method,
+            "best_trial_number": best.number, "best_params": best.params,
+            "estimator_params": {**candidate.params, **best.params},
+            "best_cv_mean": best.result.mean, "best_cv_se": best.result.se,
+            "best_secondary": best.result.secondary, "best_fold_scores": best.result.fold_scores,
+            "n_trials": len(study.trials), "n_folds": len(plan.folds),
+            "sampler": SAMPLER if optuna else "grid", "seed": seed if optuna else None,
+            "direction": "minimize", "pruner": PRUNER, "n_jobs": N_JOBS,
+            "search_space": study.search_space,
+            "search_space_sha256": hashlib.sha256(
+                json.dumps(study.search_space, sort_keys=True).encode("utf-8")).hexdigest(),
+            "edge_warning": study.edge_warning,
+            "params_at_bounds": study.params_at_bounds,
+            "params_at_bounds_note": None if not optuna else
+                "informational only: best values exactly equal to a configured bound",
+            "duration_seconds": study.duration_seconds,
+            "mlflow": {"tracking_uri": tracking_uri, "experiment": EXPERIMENTS["tuning"],
+                       "parent_run_id": parent.run_id, "child_run_ids": child_ids},
+            "lineage": {
+                "pipeline_run_id": lineage.pipeline_run_id, "git_commit": lineage.git_commit,
+                "git_dirty": lineage.git_dirty, "data_sha256": lineage.data_sha256,
+                "split_manifest_sha256": lineage.split_manifest_sha256,
+                "config_hash": lineage.config_hash, "folds_sha256": folds_sha256,
+                "seed": lineage.seed,
+            },
+            "created_at_utc": utc_now(),
+        }  # fmt: skip
+        best_path.write_text(json.dumps(jsonable(payload), indent=2) + "\n", encoding="utf-8")
+        trials_path = out_dir / f"{candidate.name}_trials.csv"
+        study.table().to_csv(trials_path, index=False, lineterminator="\n")
+        parent.log_artifact(best_path)
+        parent.log_artifact(trials_path)
+    return study, parent.run_id, [best_path, trials_path]
 
 
 def _reference_overrides(
@@ -338,7 +564,7 @@ def _record(run: ResultRun, result: TrainResult, provenance: _Provenance) -> Non
         data_sha256=lineage.data_sha256, split_manifest_sha256=lineage.split_manifest_sha256,
         config_hash=lineage.config_hash,
         config_hash_covers=["data", "validation", "schema", "features", "models"],
-        seed=lineage.seed,
+        folds_sha256=sha256_file(result.folds_path), seed=lineage.seed,
     )  # fmt: skip
     run.log_params({"candidates": list(result.results), "cv_folds": validation.cv_folds,
                     "cv_repeats": validation.cv_repeats, "n_bins": validation.n_bins})  # fmt: skip
@@ -389,6 +615,42 @@ def _record(run: ResultRun, result: TrainResult, provenance: _Provenance) -> Non
             "used_for_selection": False, "effective_params": result.dev_check_params,
         })  # fmt: skip
         runs[EXPERIMENTS["cv_comparison"]] = result.dev_check_run_ids
+    if result.studies:
+        run.log_value("tuning", {
+            name: {
+                "method": st.method, "n_trials": len(st.trials), "n_folds": len(st.best.result.fold_scores),
+                "best_trial_number": st.best.number, "best_params": st.best.params,
+                "best_cv_mean": st.best.result.mean, "best_cv_se": st.best.result.se,
+                "best_secondary": st.best.result.secondary,
+                "edge_warning": st.edge_warning, "params_at_bounds": st.params_at_bounds,
+                "seed": st.seed, "duration_seconds": st.duration_seconds,
+                "mlflow_parent_run_id": result.study_run_ids[name],
+            }
+            for name, st in result.studies.items()
+        })  # fmt: skip
+        for name, st in result.studies.items():
+            run.log_metrics({f"tuning.{name}.best_cv_mean": st.best.result.mean,
+                             f"tuning.{name}.best_cv_se": st.best.result.se,
+                             f"tuning.{name}.duration_seconds": st.duration_seconds})  # fmt: skip
+            for path in result.tuning_paths[name]:
+                run.log_artifact(path, description=f"M8 tuning output ({name})")
+        runs[EXPERIMENTS["tuning"]] = result.study_run_ids
+    if result.execution_budget:
+        run.log_value("execution_budget", result.execution_budget)
+        run.log_params({"budget_deviates_from_canonical":
+                        bool(result.execution_budget["deviations"])})  # fmt: skip
+    if result.comparison:
+        for name, cv in result.comparison.items():
+            _record_cv(run, f"cv_comparison.{name}", cv)
+        run.log_value("cv_comparison", {
+            "candidates": list(result.comparison), "blend_linear_component": result.blend_linear,
+            "mlflow_run_ids": result.comparison_run_ids,
+            "table": [{k: v for k, v in row.items() if not k.startswith("fold_")}
+                      for row in result.comparison_rows],
+            "note": "comparison evidence only; no model is selected here (selection is M9)",
+        })  # fmt: skip
+        for path in result.comparison_paths:
+            run.log_artifact(path, description="M8 final CV comparison")
     run.log_value("mlflow", {
         "tracking_uri": provenance.tracking_uri, "pipeline_run_id": result.pipeline_run_id,
         "runs": runs,
@@ -462,6 +724,24 @@ def report(result: TrainResult) -> str:
     if result.dev_checks:
         lines += ["", ("Development checks (hpp-cv-comparison, stage=development_check; "
                        "not used for selection)"), *_cv_table(result.dev_checks)]  # fmt: skip
+    if result.studies:
+        deviations = result.execution_budget.get("deviations", [])
+        if deviations:
+            lines += ["", "EXECUTION BUDGET DEVIATES FROM THE CANONICAL CONFIGURATION: "
+                      + "; ".join(deviations)]  # fmt: skip
+        lines += ["", "Tuning (hpp-tuning; objective: mean CV log-RMSE)",
+                  (f"{'candidate':<16}{'method':>8}{'trials':>8}{'best_mean':>11}{'best_se':>10}"
+                   f"{'minutes':>9}  best parameters")]  # fmt: skip
+        for name, st in result.studies.items():
+            edge = "  EDGE WARNING" if st.edge_warning else ""
+            params = ", ".join(f"{k}={v:.4g}" if isinstance(v, float) else f"{k}={v}"
+                               for k, v in st.best.params.items())  # fmt: skip
+            lines.append(f"{name:<16}{st.method:>8}{len(st.trials):>8}{st.best.result.mean:>11.5f}"
+                         f"{st.best.result.se:>10.5f}{st.duration_seconds / 60:>9.1f}  {params}{edge}")  # fmt: skip
+    if result.comparison:
+        lines += ["", (f"Final CV comparison (hpp-cv-comparison, stage=cv_comparison; blend = "
+                       f"{result.blend_linear} + lightgbm; evidence only, no selection)"),
+                  *_cv_table(result.comparison)]  # fmt: skip
     if result.result_path is not None:
         lines += ["", f"Run record: {result.result_path}"]
     return "\n".join(lines)

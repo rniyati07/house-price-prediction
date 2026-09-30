@@ -144,6 +144,12 @@ class TrackedRun:
         for key, value in metrics.items():
             self._client.log_metric(self.run_id, key, float(value))
 
+    def set_tag(self, key: str, value: object) -> None:
+        """An extra tag (e.g. ``edge_warning`` on a grid tuning run, DOC-03 §10.3)."""
+        self._client.set_tag(
+            self.run_id, key, str(value).lower() if isinstance(value, bool) else str(value)
+        )
+
     def log_artifact(self, path: Path) -> None:
         """Attach a file (e.g. the ablation table, DOC-03 §14.6) to the run."""
         self._client.log_artifact(self.run_id, str(path))

@@ -176,7 +176,9 @@ def _create_split(
     return SplitResult(dev=dev, holdout_ids=manifest.holdout_ids, manifest=manifest, created=True)
 
 
-def _load_split(in_scope: pd.DataFrame, config: ProjectConfig) -> SplitResult:
+def _load_split(
+    in_scope: pd.DataFrame, config: ProjectConfig, verify_holdout_file: bool = True
+) -> SplitResult:
     try:
         manifest = SplitManifest.model_validate_json(
             config.manifest_path.read_text(encoding="utf-8")
@@ -191,7 +193,7 @@ def _load_split(in_scope: pd.DataFrame, config: ProjectConfig) -> SplitResult:
         problems.append("manifest was created from a different raw file")
     if sha256_file(config.dev_path) != manifest.dev_sha256:
         problems.append(f"{config.dev_path} does not match its manifest hash")
-    if sha256_file(config.holdout_path) != manifest.holdout_sha256:
+    if verify_holdout_file and sha256_file(config.holdout_path) != manifest.holdout_sha256:
         problems.append(f"{config.holdout_path} does not match its manifest hash")
     dev_ids, holdout_ids = set(manifest.dev_ids), set(manifest.holdout_ids)
     if dev_ids & holdout_ids:
@@ -212,9 +214,27 @@ def _load_split(in_scope: pd.DataFrame, config: ProjectConfig) -> SplitResult:
 
 
 def create_or_load_split(
-    in_scope: pd.DataFrame, scope_record: ScopeRecord, config: ProjectConfig
+    in_scope: pd.DataFrame,
+    scope_record: ScopeRecord,
+    config: ProjectConfig,
+    *,
+    verify_holdout_file: bool = True,
 ) -> SplitResult:
-    """Create the split on first use; afterwards load and verify it (never regenerate)."""
+    """Create the split on first use; afterwards load and verify it (never regenerate).
+
+    ``verify_holdout_file=False`` is the training path (AC-030, FR-029): the persisted
+    split is verified through the manifest, the raw-file hash, and the development file's
+    hash, and the holdout file is never opened, not even to hash it. It also never creates
+    a split. ``make split`` (and the M9 holdout evaluation) keep verifying the holdout hash.
+    """
+    if not verify_holdout_file:
+        required = [config.dev_path, config.manifest_path]
+        absent = [str(path) for path in required if not path.exists()]
+        if absent:
+            raise SplitIntegrityError(
+                f"persisted split not found ({absent}); training never creates the split"
+            )
+        return _load_split(in_scope, config, verify_holdout_file=False)
     paths = [config.dev_path, config.holdout_path, config.manifest_path]
     present = [path.exists() for path in paths]
     if all(present):

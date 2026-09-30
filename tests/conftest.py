@@ -93,11 +93,13 @@ def make_env(
 
 
 FAST_FOLDS, FAST_REPEATS = 3, 1
+FAST_GRID, FAST_RF_TRIALS, FAST_LGBM_TRIALS = 3, 2, 2
 
 
 def use_fast_models(env: SampleEnv) -> None:
-    """Shrink the M7 training effort in ``env`` for tests: 3-point grids, 30 LightGBM trees,
-    and 3 folds x 1 repeat (every linear fit refits Yeo-Johnson on 48 columns).
+    """Shrink the M7/M8 training effort in ``env`` for tests: 3-point grids, 30 LightGBM
+    reference trees, 2 Random Forest and 2 LightGBM tuning trials, and 3 folds x 1 repeat
+    (every linear fit refits Yeo-Johnson on 48 columns).
 
     Only the test copies of ``models.yaml`` and ``validation.yaml`` change; the code paths
     are the real ones. The real 5 x 3 folds are covered by ``test_cv.py``.
@@ -109,8 +111,10 @@ def use_fast_models(env: SampleEnv) -> None:
     path = env.config_dir / "models.yaml"
     models = yaml.safe_load(path.read_text(encoding="utf-8"))
     for name in ("ridge", "lasso"):
-        models["candidates"][name]["grid"]["n"] = 3
+        models["candidates"][name]["grid"]["n"] = FAST_GRID
     models["candidates"]["lightgbm"]["reference"]["n_estimators"] = 30
+    models["candidates"]["random_forest"]["n_trials"] = FAST_RF_TRIALS
+    models["candidates"]["lightgbm"]["n_trials"] = FAST_LGBM_TRIALS
     path.write_text(yaml.safe_dump(models, sort_keys=False), encoding="utf-8")
 
 
@@ -181,25 +185,47 @@ def real_config() -> ProjectConfig:
 @dataclass(frozen=True)
 class M7Train:
     """The RC-02 workflow on the fixture: a first ``train`` with no committed outcome (stops),
-    then the proposed outcome written as the reviewed commit would, then a second ``train``."""
+    then the proposed outcome written as the reviewed commit would, then a second ``train``
+    (development checks, M8 tuning, blend, 7-candidate comparison).
+
+    The holdout file is deleted right after the split is created, so both runs prove that
+    training never needs it (AC-030). ``repo_before`` / ``repo_after`` fingerprint the real
+    project's folds, tuning artifacts and MLflow store, which the fixture must not touch."""
 
     env: SampleEnv
     uri: str
     first: TrainResult
     second: TrainResult
+    repo_before: dict[str, object]
+    repo_after: dict[str, object]
+
+
+def repo_fingerprint() -> dict[str, object]:
+    """Hashes / file lists of the real project's training outputs (never written by tests)."""
+    folds = REPO_ROOT / "artifacts" / "cv" / "folds.json"
+    tuning = REPO_ROOT / "artifacts" / "tuning"
+    mlruns = REPO_ROOT / "mlruns"
+    return {
+        "folds": sha256_file(folds) if folds.is_file() else None,
+        "tuning": sorted((p.name, sha256_file(p)) for p in tuning.glob("*")) if tuning.is_dir() else [],
+        "mlruns_entries": sorted(str(p.relative_to(mlruns)) for p in mlruns.rglob("meta.yaml"))
+        if mlruns.is_dir() else [],
+    }  # fmt: skip
 
 
 @pytest.fixture(scope="session")
 def m7_train(tmp_path_factory: pytest.TempPathFactory) -> M7Train:
     from house_price.data import split
 
+    repo_before = repo_fingerprint()
     env = make_env(tmp_path_factory.mktemp("m7_train"))
     use_fast_models(env)
     set_ablation_outcome(env, None)
     assert split.main(env.cli_args()) == 0
+    env.load().holdout_path.unlink()  # training must never need the holdout file
     uri = (env.root / "mlruns").as_uri()
     first = run_train(env.config_dir, env.root, uri)
     assert first.outcome_check is not None
     set_ablation_outcome(env, first.outcome_check.proposed)
     second = run_train(env.config_dir, env.root, uri)
-    return M7Train(env, uri, first, second)
+    return M7Train(env, uri, first, second, repo_before, repo_fingerprint())
