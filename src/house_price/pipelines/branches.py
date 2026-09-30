@@ -34,11 +34,24 @@ BRANCHES: tuple[Branch, ...] = ("linear", "tree")
 
 
 def branch_groups(branch: Branch, feature_config: FeatureConfig) -> BranchGroups:
-    """The configured column groups of ``branch``."""
+    """The effective column groups of ``branch``.
+
+    Engineered features the branch's committed ablation outcome drops
+    (``dropped_engineered``, DOC-03 §6.6) are moved from their group to ``dropped``; with no
+    outcome (``None``) or an empty one, the configured groups are returned unchanged.
+    """
     if branch not in BRANCHES:
         raise ValueError(f"unknown branch {branch!r}; expected one of {BRANCHES}")
     groups: BranchGroups = getattr(feature_config, branch)
-    return groups
+    removed = set(groups.dropped_engineered or [])
+    if not removed:
+        return groups
+    return groups.model_copy(update={
+        "numeric": [c for c in groups.numeric if c not in removed],
+        "ordinal": [c for c in groups.ordinal if c not in removed],
+        "nominal": [c for c in groups.nominal if c not in removed],
+        "dropped": [*groups.dropped, *(c for c in groups.all_columns if c in removed)],
+    })  # fmt: skip
 
 
 def feature_engineer_output(schema: SchemaConfig, feature_config: FeatureConfig) -> list[str]:

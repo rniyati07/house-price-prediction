@@ -31,7 +31,7 @@ from house_price.data.split import create_or_load_split
 from house_price.features.engineer import FeatureEngineer
 from house_price.features.semantic import SemanticNAFiller
 from house_price.pipelines import build_column_transformer, build_pipeline, check_group_coverage
-from house_price.pipelines.branches import Branch, feature_engineer_output
+from house_price.pipelines.branches import Branch, branch_groups, feature_engineer_output
 from house_price.pipelines.check import main as check_main
 from house_price.results import read_index, read_result
 from tests.conftest import CONFIG_DIR, REPO_ROOT, ModelData, make_env
@@ -107,12 +107,20 @@ def test_rows_are_kept(model_data: ModelData, linear: TransformedTargetRegressor
 
 @pytest.mark.parametrize("branch", ["linear", "tree"])
 def test_only_the_dropped_group_is_removed(
-    branch: Branch, linear: TransformedTargetRegressor, tree: TransformedTargetRegressor
-) -> None:
+    branch: Branch, linear: TransformedTargetRegressor, tree: TransformedTargetRegressor,
+    model_data: ModelData,
+) -> None:  # fmt: skip
+    """``remainder="drop"`` removes exactly the effective dropped group: ``GarageYrBlt`` plus
+    the branch's committed ablation drops (DOC-03 §7.5, §6.6)."""
     ct = _ct(linear if branch == "linear" else tree)
     name, action, columns = ct.transformers_[-1]
     assert (name, action) == ("remainder", "drop")
-    assert list(columns) == ["GarageYrBlt"]
+    expected = branch_groups(branch, model_data.features).dropped
+    assert sorted(columns) == sorted(expected)
+    configured = getattr(model_data.features, branch)
+    assert expected[0] == "GarageYrBlt" and set(expected[1:]) == set(
+        configured.dropped_engineered or []
+    )
 
 
 # ------------------------------------------------- B: forbidden techniques (AC-020)
@@ -211,7 +219,11 @@ def test_tree_branch_steps(tree: TransformedTargetRegressor) -> None:
 def test_tree_output_is_not_scaled(model_data: ModelData, tree: TransformedTargetRegressor) -> None:
     out = _preprocessed(tree, model_data.X)
     engineered = tree.regressor_[:2].transform(model_data.X)
-    for column in ("GrLivArea", "TotalSF", "LotArea", "HouseAge"):
+    active = branch_groups("tree", model_data.features).numeric
+    retained = [f for f in model_data.features.engineered
+                if f in active and engineered[f].notna().all()]  # fmt: skip
+    assert retained
+    for column in ("GrLivArea", "LotArea", *retained):
         np.testing.assert_array_equal(out[f"numeric__{column}"], engineered[column])
     assert set(np.unique(out.filter(like="ordinal__").to_numpy())) <= {0, 1, 2, 3, 4, 5}
     codes = out.filter(like="nominal__").to_numpy()
@@ -346,11 +358,13 @@ def test_reordered_request_columns_give_identical_predictions(
 # ------------------------------------------------------------ N: feature names
 
 
-def test_ridge_feature_names(linear: TransformedTargetRegressor) -> None:
+def test_ridge_feature_names(linear: TransformedTargetRegressor, model_data: ModelData) -> None:
     names = list(_ct(linear).get_feature_names_out())
     for prefix in ("numeric__", "ordinal__", "nominal__"):
         assert any(n.startswith(prefix) for n in names), prefix
-    assert "numeric__TotalSF" in names and "numeric__GarageAge" in names
+    groups = branch_groups("linear", model_data.features)
+    for feature in model_data.features.engineered:  # the committed linear outcome applies
+        assert (f"numeric__{feature}" in names) == (feature in groups.numeric), feature
     assert "ordinal__KitchenQual" in names
     assert any(n.startswith("nominal__MSSubClass_") for n in names)
     assert any(n.startswith("numeric__missingindicator_") for n in names)
@@ -358,6 +372,22 @@ def test_ridge_feature_names(linear: TransformedTargetRegressor) -> None:
         assert not any(absent in n for n in names), absent
     bases = {n.split("__", 1)[1] for n in names}
     assert not {"Id", "PID"} & bases
+
+
+def test_impossible_garage_year_is_imputed_like_a_missing_year(
+    model_data: ModelData, linear: TransformedTargetRegressor
+) -> None:
+    """DOC-03 §6.4 downstream: GarageYrBlt > YrSold reaches the fitted pipeline exactly as a
+    missing garage year does (median imputation + indicator), never as a negative age."""
+    garage = model_data.X[model_data.X["GarageType"].notna()].head(1)
+    impossible = garage.assign(GarageYrBlt=2207.0)
+    unknown = garage.assign(GarageYrBlt=np.nan)
+    out_impossible, out_unknown = _preprocessed(linear, impossible), _preprocessed(linear, unknown)
+    pd.testing.assert_frame_equal(out_impossible, out_unknown)
+    assert np.isfinite(out_impossible.to_numpy(dtype="float64")).all()
+    engineered = linear.regressor_[:2].transform(impossible)
+    assert pd.isna(engineered["GarageAge"]).all()
+    assert np.isfinite(linear.predict(impossible)).all()
 
 
 # ------------------------------------------------------------------ real dataset

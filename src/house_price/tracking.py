@@ -48,8 +48,11 @@ STANDARD_TAGS = (
     "pipeline_run_id", "git_commit", "git_dirty", "data_sha256", "split_manifest_sha256",
     "config_hash", "seed", "stage", "candidate",
 )  # fmt: skip
-STAGES = ("baselines", "ablation", "tuning", "cv_comparison", "selection", "evaluation",
-          "release", "smoke")  # fmt: skip
+# DOC-03 §14.3 stages, plus ``development_check``: DOC-05 M7 task 8 tags the one-off
+# reference-configuration runs of the four candidates with it (never used for selection).
+STAGES = ("baselines", "ablation", "development_check", "tuning", "cv_comparison", "selection",
+          "evaluation", "release", "smoke")  # fmt: skip
+PARENT_TAG = "mlflow.parentRunId"  # MLflow's own tag for nested runs
 
 _SHA256 = re.compile(r"^[0-9a-f]{64}$")
 _GIT_SHA = re.compile(r"^[0-9a-f]{40}$")
@@ -141,6 +144,10 @@ class TrackedRun:
         for key, value in metrics.items():
             self._client.log_metric(self.run_id, key, float(value))
 
+    def log_artifact(self, path: Path) -> None:
+        """Attach a file (e.g. the ablation table, DOC-03 §14.6) to the run."""
+        self._client.log_artifact(self.run_id, str(path))
+
 
 class Tracker:
     """Opens runs in the project's experiments, always with the standard tags."""
@@ -161,12 +168,24 @@ class Tracker:
 
     @contextmanager
     def run(
-        self, experiment: str, *, stage: str, candidate: str, run_name: str | None = None
+        self,
+        experiment: str,
+        *,
+        stage: str,
+        candidate: str,
+        run_name: str | None = None,
+        parent_run_id: str | None = None,
     ) -> Iterator[TrackedRun]:
-        """Open a tagged run; it ends FINISHED, or FAILED if the block raises."""
+        """Open a tagged run; it ends FINISHED, or FAILED if the block raises.
+
+        With ``parent_run_id`` the run is nested under that run (DOC-03 §14.2), in the
+        same experiment.
+        """
         if stage not in STAGES:
             raise TrackingError(f"unknown stage {stage!r}; expected one of {STAGES}")
         tags = {**self.lineage.tags(), "stage": stage, "candidate": candidate}
+        if parent_run_id is not None:
+            tags[PARENT_TAG] = parent_run_id
         run = self.client.create_run(self.experiment_id(experiment), tags=tags, run_name=run_name)
         tracked = TrackedRun(self.client, run.info.run_id)
         try:

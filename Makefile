@@ -29,6 +29,7 @@ validate-data:
 split:
 	$(PYTHON) -m house_price.data.split
 
-# house-price train: cross-validate the baselines and log them to MLflow (M6).
+# house-price train: baselines (M6), then feature ablation with the RC-02 check and the
+# candidate development checks (M7). Exit code 3 = RC-02 stop (review the ablation).
 train:
 	$(PYTHON) -m house_price.cli train

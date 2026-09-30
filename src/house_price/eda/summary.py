@@ -19,6 +19,7 @@ from house_price.eda.report import REPORT_NAME
 from house_price.results import ResultRun
 
 M4_IDS = ("E-27", "E-28", "E-29")  # the engineered-feature evidence (DOC-05 M4)
+M7_IDS = ("E-30",)  # the ablation table: written and recorded by the M7 train run
 TOP_CORRELATES = 5
 REQUIRED_TABLES = (
     "E-03_key_integrity", "E-05_target_statistics", "E-08_split_balance",
@@ -160,7 +161,8 @@ def deliverables(tables_dir: Path, figures_dir: Path) -> tuple[list[Path], list[
     """Saved EDA files split into M3's and M4's (E-27 to E-29)."""
     files = sorted([*tables_dir.glob("E-*.csv"), *figures_dir.glob("E-*.png")])
     report = tables_dir / REPORT_NAME
-    m3 = [f for f in files if not is_m4(f.stem)] + ([report] if report.is_file() else [])
+    m3 = [f for f in files if not (is_m4(f.stem) or f.stem.startswith(M7_IDS))]
+    m3 += [report] if report.is_file() else []
     return m3, [f for f in files if is_m4(f.stem)]
 
 

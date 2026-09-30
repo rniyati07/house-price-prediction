@@ -68,6 +68,8 @@ linear:
   ]
   # GarageYrBlt is replaced by HasGarage and GarageAge (ADR-05).
   dropped: ["GarageYrBlt"]
+  # M7 ablation outcome (DOC-03 §6.6, IN-04; E-30): moved to the dropped group.
+  dropped_engineered: ["TotalBath", "RemodAge", "HasPool", "HasBsmt", "GarageAge"]
 
 tree:
   numeric: [
@@ -93,3 +95,5 @@ tree:
     "MiscFeature",
   ]
   dropped: ["GarageYrBlt"]
+  # M7 ablation outcome (DOC-03 §6.6, IN-04; E-30): moved to the dropped group.
+  dropped_engineered: ["HouseAge", "RemodAge", "IsRemodeled", "HasGarage", "HasBsmt", "HasFireplace"]

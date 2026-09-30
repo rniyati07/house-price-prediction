@@ -25,7 +25,7 @@ from house_price.tracking import TrackingError, git_state
 RECORD_KEYS = {
     "record_version", "milestone", "run_id", "status", "started_at_utc", "finished_at_utc",
     "duration_seconds", "command", "git", "environment", "lineage", "params", "metrics",
-    "findings", "artifacts", "error",
+    "findings", "artifacts", "stop_reason", "error",
 }  # fmt: skip
 
 
@@ -153,6 +153,15 @@ def test_mark_failed_without_exception(tmp_path: Path) -> None:
     record = read_result(run.path)
     assert record["status"] == "failed"
     assert record["error"]["message"] == "ADR-fixed number contradicted (P-04)"
+
+
+def test_mark_stopped_is_not_a_failure(tmp_path: Path) -> None:
+    with start_run("M7", root=tmp_path) as run:
+        run.mark_stopped("RC-02: no committed ablation outcome")
+    record = read_result(run.path)
+    assert record["status"] == "stopped" and record["error"] is None
+    assert record["stop_reason"] == "RC-02: no committed ablation outcome"
+    assert read_index(tmp_path / "results")[-1]["status"] == "stopped"
 
 
 def test_index_is_append_only(tmp_path: Path) -> None:

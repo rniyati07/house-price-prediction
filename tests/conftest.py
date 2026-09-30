@@ -11,6 +11,7 @@ absent (as in CI, which never has the dataset).
 from __future__ import annotations
 
 import shutil
+from collections.abc import Mapping
 from dataclasses import dataclass
 from pathlib import Path
 
@@ -27,6 +28,7 @@ from house_price.config import (
 )
 from house_price.data.load import cast_to_schema, load_raw, read_text_csv, sha256_file
 from house_price.data.schema import select_model_input
+from house_price.models.train import TrainResult, run_train
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
 CONFIG_DIR = REPO_ROOT / "configs"
@@ -90,6 +92,40 @@ def make_env(
     return SampleEnv(root=root, config_dir=config_dir, raw_path=raw_path)
 
 
+FAST_FOLDS, FAST_REPEATS = 3, 1
+
+
+def use_fast_models(env: SampleEnv) -> None:
+    """Shrink the M7 training effort in ``env`` for tests: 3-point grids, 30 LightGBM trees,
+    and 3 folds x 1 repeat (every linear fit refits Yeo-Johnson on 48 columns).
+
+    Only the test copies of ``models.yaml`` and ``validation.yaml`` change; the code paths
+    are the real ones. The real 5 x 3 folds are covered by ``test_cv.py``.
+    """
+    validation_path = env.config_dir / "validation.yaml"
+    validation = yaml.safe_load(validation_path.read_text(encoding="utf-8"))
+    validation["cv_folds"], validation["cv_repeats"] = FAST_FOLDS, FAST_REPEATS
+    validation_path.write_text(yaml.safe_dump(validation, sort_keys=False), encoding="utf-8")
+    path = env.config_dir / "models.yaml"
+    models = yaml.safe_load(path.read_text(encoding="utf-8"))
+    for name in ("ridge", "lasso"):
+        models["candidates"][name]["grid"]["n"] = 3
+    models["candidates"]["lightgbm"]["reference"]["n_estimators"] = 30
+    path.write_text(yaml.safe_dump(models, sort_keys=False), encoding="utf-8")
+
+
+def set_ablation_outcome(env: SampleEnv, outcome: Mapping[str, list[str]] | None) -> None:
+    """Write (or, with ``None``, remove) ``dropped_engineered`` in ``env``'s features.yaml,
+    as the reviewed commit would; used only on temporary test environments."""
+    path = env.config_dir / "features.yaml"
+    features = yaml.safe_load(path.read_text(encoding="utf-8"))
+    for branch in ("linear", "tree"):
+        features[branch].pop("dropped_engineered", None)
+        if outcome is not None:
+            features[branch]["dropped_engineered"] = list(outcome[branch])
+    path.write_text(yaml.safe_dump(features, sort_keys=False), encoding="utf-8")
+
+
 @pytest.fixture
 def sample_env(tmp_path: Path) -> SampleEnv:
     return make_env(tmp_path)
@@ -140,3 +176,30 @@ def real_config() -> ProjectConfig:
     if not REAL_RAW.is_file():
         pytest.skip(f"real dataset not present at {REAL_RAW}")
     return load_project_config(CONFIG_DIR, REPO_ROOT)
+
+
+@dataclass(frozen=True)
+class M7Train:
+    """The RC-02 workflow on the fixture: a first ``train`` with no committed outcome (stops),
+    then the proposed outcome written as the reviewed commit would, then a second ``train``."""
+
+    env: SampleEnv
+    uri: str
+    first: TrainResult
+    second: TrainResult
+
+
+@pytest.fixture(scope="session")
+def m7_train(tmp_path_factory: pytest.TempPathFactory) -> M7Train:
+    from house_price.data import split
+
+    env = make_env(tmp_path_factory.mktemp("m7_train"))
+    use_fast_models(env)
+    set_ablation_outcome(env, None)
+    assert split.main(env.cli_args()) == 0
+    uri = (env.root / "mlruns").as_uri()
+    first = run_train(env.config_dir, env.root, uri)
+    assert first.outcome_check is not None
+    set_ablation_outcome(env, first.outcome_check.proposed)
+    second = run_train(env.config_dir, env.root, uri)
+    return M7Train(env, uri, first, second)

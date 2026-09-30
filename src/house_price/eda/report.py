@@ -5,7 +5,8 @@ Reads only the saved deliverables (``reports/eda/E-*.csv``), as the roadmap requ
 
 * ``E-35_confirmation_register.csv``: every DOC-02 documented property, confirmed or not
 * ``E-35_question_answers.csv``: answers to Q1-Q19; Q17 carries the M4 evidence (E-27 to
-  E-29) while its retention part stays open until the M7 ablation (E-30)
+  E-29) and, once ``E-30_ablation.csv`` exists (written by the M7 ``train`` ablation), the
+  per-branch retention decisions; without E-30 its retention part stays open
 * ``E-35_eda_report.md``: the narrative report in nine sections, each with observations,
   evidence, and implications for later milestones
 * ``E-36_data_card_inputs.csv``: known issues handed to the data card
@@ -87,6 +88,38 @@ def _table(frame: pd.DataFrame, columns: list[str], limit: int | None = None) ->
 # ------------------------------------------------------------------ question answers
 
 
+def ablation_answer(ablation: pd.DataFrame, engineered: pd.DataFrame) -> str:
+    """The Q17 retention part, read from E-30 (DOC-03 §6.6; IN-04), with one sentence per
+    dropped feature comparing the ablation with its E-27 hypothesis assessment."""
+    supported = engineered.set_index("feature")["hypothesis_supported"].astype(bool)
+    parts = [("M7 ablation (E-30; IN-04: a feature is dropped only if removing it lowers the "
+              "branch's mean CV log-RMSE; 15 shared folds on the development set):")]  # fmt: skip
+    notes = []
+    for branch, rows in ablation.groupby("branch", sort=False):
+        retained = rows[rows["retained"].astype(bool)]
+        dropped = rows[~rows["retained"].astype(bool)]
+        first = rows.iloc[0]
+        parts.append(
+            f"{branch} branch (reference {first['reference_model']}, full-feature mean "
+            f"{first['mean_with']:.4f}): retains {len(retained)} of {len(rows)}"
+            + (
+                f", drops {_join(dropped['feature'].tolist())}."
+                if len(dropped)
+                else ", drops none."
+            )
+        )
+        for row in dropped.itertuples():
+            was_supported = bool(supported.get(row.feature, False))
+            hypothesis, link = ("supported", "but") if was_supported else ("not supported", "and")
+            size = abs(row.delta) / row.delta_se if row.delta_se > 0 else float("inf")
+            notes.append(
+                f"{row.feature} ({branch}): removing it changes the mean by {row.delta:+.5f} "
+                f"(paired SE {row.delta_se:.5f}, {size:.1f} SE); its E-27 hypothesis was "
+                f"{hypothesis}, {link} in this branch the feature does not lower the CV error."
+            )
+    return " ".join(parts + notes)
+
+
 def answer_questions(t: Tables) -> pd.DataFrame:
     """Answers to the DOC-02 §4 questions, each derived from the saved evidence."""
     schema = t["E-01_shape_schema"]
@@ -115,8 +148,8 @@ def answer_questions(t: Tables) -> pd.DataFrame:
     unsupported = engineered[~engineered["hypothesis_supported"].astype(bool)]
     floor = t["E-29_remodel_floor_audit"].set_index("metric")["value"].astype(float)
     houseage_trend = str(engineered.set_index("feature").loc["HouseAge", "observed"])
-    q17 = (
-        "Partly answered in M4; retention stays open until M7. M4 implemented the 12 approved "
+    m4_evidence = (
+        "M4 implemented the 12 approved "
         "formulas (house_price.features) and assessed each DOC-02 §10 hypothesis on the "
         f"development set (E-27, E-28): {len(supported)} of {len(engineered)} supported "
         f"({_join(supported['feature'].tolist())}). Not supported: "
@@ -124,9 +157,18 @@ def answer_questions(t: Tables) -> pd.DataFrame:
         + f". E-29: {int(floor['floor_rows_built_before_1950'])} pre-1950 houses sit at the "
         f"1950 remodel floor; they supply {floor['pct_of_remodeled_flags_from_floor']:.1f}% of "
         "the IsRemodeled = 1 flags, and their RemodAge understates HouseAge by a median "
-        f"{floor['floor_rows_median_houseage_minus_remodage']:.0f} years. Retention is not "
-        "decided here: the M7 cross-validation ablation decides it per branch (E-30, IN-04)."
+        f"{floor['floor_rows_median_houseage_minus_remodage']:.0f} years."
     )
+    if "E-30_ablation" in t:
+        q17 = ("Answered (M4 evidence and M7 ablation). " + m4_evidence + " "
+               + ablation_answer(t["E-30_ablation"], engineered))  # fmt: skip
+    else:
+        q17 = (
+            "Partly answered in M4; retention stays open until M7. "
+            + m4_evidence
+            + " Retention is not decided here: the M7 cross-validation ablation decides it per "
+            "branch (E-30, IN-04)."
+        )
 
     def sd_ratio(scale: str) -> float:
         sd = spread.loc[spread["scale"] == scale, "residual_sd"]
@@ -334,7 +376,11 @@ def render_markdown(t: Tables, register: pd.DataFrame, answers: pd.DataFrame,
             "and `reports/figures/eda/`. Target relationships use the development set only; the "
             "raw file is used for target-free profiling and the ADR-06 scope review (FR-009). "
             "Q17 carries the M4 engineered-feature evidence (E-27 to E-29); feature retention "
-            "is decided by the M7 ablation (E-30)."
+            + (
+                "is decided by the M7 ablation (E-30), summarized in Q17."
+                if "E-30_ablation" in t
+                else "is decided by the M7 ablation (E-30)."
+            )
         ),
         "",
     ]
@@ -440,11 +486,14 @@ def render_markdown(t: Tables, register: pd.DataFrame, answers: pd.DataFrame,
          "E-28_binned_trends.csv", "E-28_discrete_price_summary.csv",
          "figures/eda/E-28_engineered_continuous.png", "figures/eda/E-28_engineered_flags.png",
          "E-29_remodel_floor_audit.csv", "figures/eda/E-29_yearremodadd_distribution.png",
+         *(["E-30_ablation.csv"] if "E-30_ablation" in t else []),
          "E-35_confirmation_register.csv", "E-36_data_card_inputs.csv"], [
         "M5: SaleType, SaleCondition, Id, and PID are not model inputs (77-column schema).",
         "M9: the temporal diagnostic (2006-2009 -> 2010) uses a partial 2010 (January-July).",
         ("M7: the per-branch cross-validation ablation (E-30) decides which engineered features "
-        "are retained; the M4 hypothesis assessments above do not."),
+        "are retained; the M4 hypothesis assessments above do not."
+        + (" The outcome is recorded per branch in features.yaml (dropped_engineered)."
+           if "E-30_ablation" in t else "")),
     ])  # fmt: skip
     lines += ["## Questions Q1-Q19", "", *_table(answers, ["question", "answer", "evidence"]), "",
               "## Confirmation Register", "",

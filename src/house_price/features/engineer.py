@@ -12,7 +12,10 @@ garage numbers are already ``0`` when the feature is absent. It does three thing
 
 Every input column is passed through (``GarageYrBlt`` included: it is dropped later by the
 column transformer, DOC-03 §7.5). Nothing is learned from data, nothing is clipped or
-repaired: a missing input gives a missing output, and a negative age stays negative.
+repaired: a missing input gives a missing output, and a negative house or remodel age stays
+negative. A garage build year later than the valuation year (``GarageYrBlt > YrSold``, such
+as the recorded 2207) is impossible and is treated as unknown for ``GarageAge``, which is
+then missing like a garage without a recorded year (DOC-03 §6.4).
 """
 
 from __future__ import annotations
@@ -42,10 +45,14 @@ def _garage_age(frame: pd.DataFrame) -> pd.Series:
     """``YrSold - GarageYrBlt`` with a garage, ``0`` without one.
 
     With a garage but no recorded build year the age stays missing: it is not invented
-    here (DOC-03 §6.4, defensive behavior).
+    here (DOC-03 §6.4, defensive behavior). A build year later than ``YrSold`` is treated
+    as unknown in the same way, so the age is missing rather than negative; the recorded
+    ``GarageYrBlt`` value itself is passed through unchanged.
     """
-    age = (frame["YrSold"] - frame["GarageYrBlt"]).astype("float64")
-    return age.where(_has_garage(frame) == 1, 0.0)
+    built = frame["GarageYrBlt"].astype("float64")
+    impossible = (built > frame["YrSold"]).fillna(False).astype(bool)
+    age = frame["YrSold"] - built.where(~impossible)
+    return age.astype("float64").where(_has_garage(frame) == 1, 0.0)
 
 
 # Name -> (columns used, formula). Every formula reads only its own row.

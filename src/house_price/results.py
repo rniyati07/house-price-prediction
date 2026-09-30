@@ -18,7 +18,8 @@ Usage::
 
 The run ends ``succeeded``; if the block raises, it ends ``failed`` with the error and the
 exception propagates. ``mark_failed`` records a failure the command reports through its exit
-code instead of an exception. Every value is supplied by the caller from actual execution or
+code instead of an exception; ``mark_stopped`` records an expected, deliberate stop (e.g. the
+RC-02 ablation check waiting for a reviewed outcome) as ``stopped``, not ``failed``. Every value is supplied by the caller from actual execution or
 from saved deliverables: this module computes nothing about the data and never guesses
 lineage (a git commit that cannot be read is recorded as ``null`` with the reason).
 
@@ -53,7 +54,7 @@ INDEX_NAME = "runs.jsonl"
 RESULT_NAME = "result.json"
 RECORD_VERSION = 1
 
-Status = Literal["running", "succeeded", "failed"]
+Status = Literal["running", "succeeded", "failed", "stopped"]
 _MILESTONE = re.compile(r"^M\d{1,2}$")
 
 
@@ -176,6 +177,11 @@ class ResultRun:
         self.record["status"] = "failed"
         self.record["error"] = {"type": "check_failed", "message": reason}
 
+    def mark_stopped(self, reason: str) -> None:
+        """End as ``stopped``: the command halted on purpose and awaits a human decision."""
+        self.record["status"] = "stopped"
+        self.record["stop_reason"] = reason
+
     # ---------------------------------------------------------------- persistence
 
     def _write(self) -> None:
@@ -261,6 +267,7 @@ def start_run(
         "metrics": {},
         "findings": {},
         "artifacts": [],
+        "stop_reason": None,
         "error": None,
     }
     run = ResultRun(milestone, run_id, directory, root, record, time.perf_counter())

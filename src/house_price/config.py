@@ -205,6 +205,10 @@ class BranchGroups(StrictModel):
     ordinal: list[str]
     nominal: list[str]
     dropped: list[str]
+    # M7 ablation outcome (DOC-03 §6.6 step 5): engineered features this branch drops.
+    # Absent (None) = no committed outcome yet; [] = outcome committed, nothing dropped.
+    # Written only by a reviewed commit, never by code (RC-02).
+    dropped_engineered: list[str] | None = None
 
     @property
     def all_columns(self) -> list[str]:
@@ -214,6 +218,17 @@ class BranchGroups(StrictModel):
     def _check_disjoint(self) -> BranchGroups:
         if _duplicates(self.all_columns):
             raise ValueError(f"columns in more than one group: {_duplicates(self.all_columns)}")
+        if self.dropped_engineered is not None:
+            if _duplicates(self.dropped_engineered):
+                raise ValueError(
+                    f"dropped_engineered lists a feature twice: {_duplicates(self.dropped_engineered)}"
+                )
+            active = set(self.numeric + self.ordinal + self.nominal)
+            inactive = [f for f in self.dropped_engineered if f not in active]
+            if inactive:
+                raise ValueError(
+                    f"dropped_engineered features must be in an active group: {inactive}"
+                )
         return self
 
 
@@ -231,7 +246,19 @@ class FeatureConfig(StrictModel):
     def _check_features(self) -> FeatureConfig:
         if _duplicates(self.engineered):
             raise ValueError(f"engineered features listed twice: {_duplicates(self.engineered)}")
+        for branch in ("linear", "tree"):
+            dropped = getattr(self, branch).dropped_engineered or []
+            unknown = [f for f in dropped if f not in self.engineered]
+            if unknown:
+                raise ValueError(f"{branch}.dropped_engineered: not engineered features {unknown}")
         return self
+
+    @property
+    def has_ablation_outcome(self) -> bool:
+        """Both branches carry a committed outcome (DOC-05 RC-02)."""
+        return self.linear.dropped_engineered is not None and (
+            self.tree.dropped_engineered is not None
+        )
 
 
 # ------------------------------------------------------------------------- models.yaml
@@ -255,10 +282,61 @@ class BaselinesConfig(StrictModel):
     linear_2feat: TwoFeatureBaselineConfig
 
 
+ParamValue = int | float | bool | str
+
+
+class GridConfig(StrictModel):
+    """A log-spaced grid over one hyperparameter (DOC-03 §10.3, §10.4)."""
+
+    param: str
+    low: float = Field(gt=0)
+    high: float = Field(gt=0)
+    n: int = Field(ge=2)
+
+    @model_validator(mode="after")
+    def _check_range(self) -> GridConfig:
+        if self.low >= self.high:
+            raise ValueError(f"grid low {self.low} must be below high {self.high}")
+        return self
+
+
+class CandidateConfig(StrictModel):
+    """One model candidate (DOC-03 §8.1, §8.4 to §8.7).
+
+    ``fixed`` settings never change; ``reference`` is the configuration used for the M7
+    ablation and development check. The global seed (``validation.yaml``, DN-02) is passed
+    to the estimator by the registry and is not repeated here.
+    """
+
+    branch: Literal["linear", "tree"]
+    tier: int = Field(ge=1)
+    tuning: Literal["grid", "optuna"]
+    grid: GridConfig | None = None
+    fixed: dict[str, ParamValue] = Field(default_factory=dict)
+    reference: dict[str, ParamValue] = Field(default_factory=dict)
+
+
+class CandidatesConfig(StrictModel):
+    ridge: CandidateConfig
+    lasso: CandidateConfig
+    random_forest: CandidateConfig
+    lightgbm: CandidateConfig
+
+
+class AblationConfig(StrictModel):
+    """Reference candidate per branch for the feature ablation (DOC-03 §6.6, DN-05)."""
+
+    linear: Literal["ridge"]
+    tree: Literal["lightgbm"]
+
+
 class ModelsConfig(StrictModel):
-    """``models.yaml``: candidate definitions (DOC-03 §5.1, §8). M6 defines the baselines."""
+    """``models.yaml``: candidate definitions (DOC-03 §5.1, §8). M6 defines the baselines;
+    M7 adds the four candidates and the ablation references."""
 
     baselines: BaselinesConfig
+    candidates: CandidatesConfig
+    ablation: AblationConfig
 
 
 # ------------------------------------------------------------------------------ loading

@@ -8,7 +8,7 @@ import pandas as pd
 import pytest
 from sklearn.base import clone
 
-from house_price.config import FeatureConfig, load_project_config
+from house_price.config import BranchGroups, FeatureConfig, load_project_config
 from house_price.features.engineer import FORMULAS, FeatureEngineer
 from house_price.features.semantic import SemanticNAFiller
 from tests.conftest import CONFIG_DIR, REPO_ROOT
@@ -23,14 +23,15 @@ NOMINAL_ORDERED_LOOKING = ["BsmtExposure", "BsmtFinType1", "GarageFinish", "Func
 # Hand-computed from tests/fixtures/feature_rows.csv (after the semantic filler), in the
 # order of FEATURES. Row notes: 1 typical; 2 no garage/basement/fireplace/2nd floor, not
 # remodeled; 3 pool; 4 garage without a recorded year (and the 1950 remodel floor);
-# 5 sold before completion (negative ages); 6/7 basement anomalies; 8 basement unrecorded;
+# 5 sold before completion (negative house/remodel ages; garage year 2009 after the 2007
+# sale is impossible, so GarageAge is unknown); 6/7 basement anomalies; 8 basement unrecorded;
 # 9 garage type recorded but every other garage field unrecorded (cars and area too).
 EXPECTED = {
     1: [2700, 3.5, 8, 3, 1, 40, 0, 1, 1, 1, 1, 8],
     2: [900, 1.0, 60, 60, 0, 50, 0, 0, 0, 0, 0, 0],
     3: [3000, 3.5, 1, 1, 0, 280, 1, 1, 1, 1, 0, 1],
     4: [1900, 1.5, 84, 59, 1, 0, 0, 1, 1, 0, 1, NAN],
-    5: [2400, 2.0, -1, -2, 1, 30, 0, 1, 1, 1, 0, -2],
+    5: [2400, 2.0, -1, -2, 1, 30, 0, 1, 1, 1, 0, NAN],
     6: [2000, 2.0, 33, 18, 1, 0, 0, 1, 1, 0, 0, 33],
     7: [3000, 3.0, 11, 11, 0, 50, 0, 1, 1, 1, 1, 11],
     8: [896, 1.0, 62, 58, 1, 0, 0, 1, 0, 0, 0, 62],
@@ -72,7 +73,8 @@ def test_configuration_matches_the_approved_design(feature_config: FeatureConfig
 
 
 def test_initial_groups_cover_the_engineer_output(feature_config: FeatureConfig) -> None:
-    """Both branches start identical and partition the 77 inputs plus 12 features."""
+    """Both branches start identical and partition the 77 inputs plus 12 features; only the
+    M7 ablation outcome (``dropped_engineered``) differs per branch (DOC-03 §6.6)."""
     schema = load_project_config(CONFIG_DIR, REPO_ROOT).schema
     output = {spec.name for spec in schema.with_role("model_input")} | set(FEATURES)
     for branch in (feature_config.linear, feature_config.tree):
@@ -81,7 +83,11 @@ def test_initial_groups_cover_the_engineer_output(feature_config: FeatureConfig)
         assert branch.ordinal == ORDINAL
         assert set(NOMINAL_ORDERED_LOOKING) | {"MSSubClass"} <= set(branch.nominal)
         assert set(FEATURES) <= set(branch.numeric)
-    assert feature_config.linear == feature_config.tree
+
+    def initial(groups: BranchGroups) -> BranchGroups:
+        return groups.model_copy(update={"dropped_engineered": None})
+
+    assert initial(feature_config.linear) == initial(feature_config.tree)
 
 
 # ------------------------------------------------------------------- formulas
@@ -113,8 +119,38 @@ def test_garage_without_recorded_year_keeps_age_missing(out: pd.DataFrame) -> No
     assert out.loc[9, "GarageArea"] == 0
 
 
-def test_negative_ages_pass_through(out: pd.DataFrame) -> None:
-    assert (out.loc[5, ["HouseAge", "RemodAge", "GarageAge"]] == [-1, -2, -2]).all()
+def test_negative_house_and_remodel_ages_pass_through(out: pd.DataFrame) -> None:
+    assert (out.loc[5, ["HouseAge", "RemodAge"]] == [-1, -2]).all()
+
+
+def _garage_rows(years: list[float], sold: int = 2007) -> pd.DataFrame:
+    return pd.DataFrame({"YrSold": [sold] * len(years), "GarageYrBlt": years,
+                         "GarageType": ["Attchd"] * len(years)})  # fmt: skip
+
+
+def test_valid_garage_year_gives_the_expected_age() -> None:
+    age = FORMULAS["GarageAge"][1](_garage_rows([1990.0, 2006.0, 2007.0]))
+    assert list(age) == [17.0, 1.0, 0.0]  # GarageYrBlt <= YrSold: YrSold - GarageYrBlt
+
+
+def test_missing_garage_year_keeps_age_missing() -> None:
+    age = FORMULAS["GarageAge"][1](_garage_rows([NAN]))
+    assert pd.isna(age.iloc[0])  # existing defensive behavior, unchanged
+
+
+def test_garage_year_after_sale_is_unknown_not_negative(out: pd.DataFrame) -> None:
+    """DOC-03 §6.4: GarageYrBlt > YrSold (e.g. the recorded 2207 of Id 2261) is treated as
+    unknown, so GarageAge is missing and goes to the fitted imputation."""
+    age = FORMULAS["GarageAge"][1](_garage_rows([2008.0, 2207.0]))
+    assert age.isna().all()
+    assert pd.isna(out.loc[5, "GarageAge"])  # fixture row 5: garage 2009, sold 2007
+    assert out.loc[5, "GarageYrBlt"] == 2009  # the recorded value is not repaired
+    assert not (out["GarageAge"] < 0).any()
+
+
+def test_garage_year_after_sale_without_garage_stays_zero() -> None:
+    rows = _garage_rows([2207.0]).assign(GarageType=["None"])
+    assert FORMULAS["GarageAge"][1](rows).iloc[0] == 0.0  # no garage -> 0, as before
 
 
 def test_wood_deck_is_not_a_porch(out: pd.DataFrame) -> None:
@@ -232,5 +268,8 @@ def test_development_set_through_both_transformers(feature_config: FeatureConfig
         feature_config.semantic_fill.categorical_none + feature_config.semantic_fill.numeric_zero
     )
     assert out[filled + ORDINAL].notna().all().all()
-    garage_without_year = (out["HasGarage"] == 1) & frame["GarageYrBlt"].isna()
+    unknown_year = frame["GarageYrBlt"].isna() | (frame["GarageYrBlt"] > frame["YrSold"])
+    garage_without_year = (out["HasGarage"] == 1) & unknown_year
     assert out["GarageAge"].isna().equals(garage_without_year)
+    assert not (out["GarageAge"] < 0).any()  # Id 2261 (GarageYrBlt 2207) is no longer -200
+    assert pd.isna(out.loc[dev["Id"] == 2261, "GarageAge"]).all()

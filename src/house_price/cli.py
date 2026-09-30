@@ -1,6 +1,7 @@
 """The ``house-price`` command line (FR-023, DOC-03 §3.2).
 
-Subcommands are added milestone by milestone. M6 adds ``train``; ``evaluate`` and
+Subcommands are added milestone by milestone. M6 adds ``train`` (extended by M7 with the
+ablation, the RC-02 check, and the development checks); ``evaluate`` and
 ``freeze`` (M9, M10) and ``predict`` (M11) follow.
 """
 
@@ -16,24 +17,29 @@ from house_price.data.errors import DataError
 
 
 def _train(args: argparse.Namespace) -> int:
-    from house_price.models.train import report, run_train
+    from house_price.models.train import EXIT_RC02_STOP, report, run_train
     from house_price.tracking import TrackingError
+
+    def progress(message: str) -> None:
+        print(f"[train] {message}", file=sys.stderr, flush=True)
 
     try:
         result = run_train(
-            args.config_dir, args.root, args.tracking_uri, args.results_dir, args.argv
+            args.config_dir, args.root, args.tracking_uri, args.results_dir, args.argv, progress
         )
     except (ConfigError, DataError, TrackingError) as exc:
         print(f"ERROR: {exc}", file=sys.stderr)
         return 1
     print(report(result))
-    return 0
+    return EXIT_RC02_STOP if result.stopped else 0
 
 
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(prog="house-price", description="House Price Prediction")
     commands = parser.add_subparsers(dest="command")
-    train = commands.add_parser("train", help="cross-validate the baselines and log them (M6)")
+    train = commands.add_parser(
+        "train", help="baselines, feature ablation (RC-02 check), development checks (M6-M7)"
+    )
     train.add_argument("--config-dir", type=Path, default=None, help="default: <root>/configs")
     train.add_argument("--root", type=Path, default=None, help="project root (default: cwd)")
     train.add_argument("--tracking-uri", default=None, help="default: file store <root>/mlruns")

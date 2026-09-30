@@ -1,9 +1,12 @@
 # Candidate definitions (DOC-03 §5.1, §8). Loaded into house_price.config.ModelsConfig.
 #
 # M6 defines the two baselines (DOC-03 §8.2, §8.3). They set the floor every candidate
-# must beat (ADR-10) and are never eligible for selection or deployment. The candidates
-# (Ridge, Lasso, Random Forest, LightGBM, blend), reference configurations, search spaces,
-# and budgets are added in M7 and M8.
+# must beat (ADR-10) and are never eligible for selection or deployment. M7 adds the four
+# candidates with their fixed settings and reference configurations, and the ablation
+# references. M8 adds the search spaces, budgets, and the blend.
+#
+# The global seed (validation.yaml, DN-02) is passed to every seeded estimator as
+# random_state by the registry; it is not repeated here.
 
 baselines:
   # The "no model" floor: predicts the fitting data's median log price for every house.
@@ -17,3 +20,53 @@ baselines:
   # (DOC-02 §2.2), passed through unscaled, inside the log-target wrapper.
   linear_2feat:
     features: ["OverallQual", "GrLivArea"]
+
+# The four candidates (DOC-03 §8.1). Tiers: DN-08 (Ridge and Lasso share the linear tier).
+candidates:
+  # DOC-03 §8.4, §10.3. The reference alpha is not fixed here: the M7 ablation chooses it
+  # with this grid on the full linear feature set (DOC-03 §6.6 step 2).
+  ridge:
+    branch: linear
+    tier: 1
+    tuning: grid
+    grid: {param: alpha, low: 1.0e-3, high: 1.0e+3, n: 25}
+
+  # DOC-03 §8.5, §10.4. The reference alpha 1e-3 is the geometric midpoint of the grid,
+  # used for the M7 development check only (approved project decision; M8 tunes it).
+  lasso:
+    branch: linear
+    tier: 1
+    tuning: grid
+    grid: {param: alpha, low: 1.0e-5, high: 1.0e-1, n: 25}
+    fixed: {max_iter: 50000}
+    reference: {alpha: 1.0e-3}
+
+  # DOC-03 §8.6, §10.5 fixed settings; every other parameter is the scikit-learn default
+  # (approved project decision). The full effective configuration is logged to MLflow.
+  random_forest:
+    branch: tree
+    tier: 2
+    tuning: optuna
+    fixed: {n_jobs: -1, bootstrap: true}
+
+  # DOC-03 §8.7; determinism settings DN-14 (§10.6); reference parameters DOC-03 §6.6.
+  lightgbm:
+    branch: tree
+    tier: 3
+    tuning: optuna
+    fixed: {deterministic: true, force_row_wise: true, n_jobs: 1, verbose: -1}
+    reference:
+      learning_rate: 0.05
+      n_estimators: 600
+      num_leaves: 15
+      min_child_samples: 20
+      subsample: 0.8
+      subsample_freq: 1
+      colsample_bytree: 0.7
+      reg_alpha: 0.0
+      reg_lambda: 0.0
+
+# Feature-ablation reference model per branch (DOC-03 §6.6, DN-05).
+ablation:
+  linear: ridge
+  tree: lightgbm
