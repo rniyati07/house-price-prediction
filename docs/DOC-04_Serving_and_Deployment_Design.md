@@ -564,7 +564,7 @@ Build arguments:
 | `MODEL_DIR` | Path in the build context of the artifact directory to bake in (for example `models/1.0.0`, or the smoke artifact directory in CI) |
 | `MODEL_VERSION` | Recorded as the OCI label `org.opencontainers.image.version`; must equal `metadata.model_version` (checked by the build script) |
 
-`.dockerignore` excludes `data/`, `mlruns/`, `notebooks/`, `reports/`, `tests/`, `.git/`, and every `models/` subdirectory except the one being baked in.
+`.dockerignore` excludes `data/`, `mlruns/`, `notebooks/`, `reports/`, `tests/`, `.git/`, `models/staging/`, `models/candidates/`, and everything else the image does not need. A static ignore file cannot name the version being built, so other frozen `models/x.y.z/` directories may be present in the build context; only `MODEL_DIR` is copied into the image (the Dockerfile copies `MODEL_DIR` alone), so an image still contains exactly one model.
 
 ## 11.3 Artifact Packaging
 
@@ -583,7 +583,7 @@ Build arguments:
 - **Command:** `uvicorn house_price.api.app:app --host 0.0.0.0 --port ${PORT:-8000} --workers 1 --no-access-log`, run through `sh -c` so that `PORT` is expanded.
 - **One worker.** Each worker would load its own copy of the model. A single worker keeps memory predictable on a small Render instance, and prediction is fast on this model size. Uvicorn's own access log is disabled because the service writes its own structured request log (Section 13); keeping both would duplicate lines in a second, unstructured format.
 - **Endpoint functions are synchronous (`def`).** FastAPI runs them in its thread pool, so a CPU-bound `predict` does not block the event loop.
-- **Container health check:** a `HEALTHCHECK` instruction runs a short Python standard-library HTTP call against `http://127.0.0.1:${PORT:-8000}/health` (the slim image has no `curl`). Used by `docker run` locally; Render uses its own health check (Section 12).
+- **Container health check:** a `HEALTHCHECK` instruction runs a short Python standard-library HTTP call against `http://127.0.0.1:${PORT:-8000}/health` (the slim image has no `curl`), every 30 seconds after a 10-second start period; during the start period it also probes every 2 seconds (`--start-interval=2s`), so a healthy container is reported promptly. Used by `docker run` locally; Render uses its own health check (Section 12).
 
 ## 11.6 Environment Variables (SD-08)
 
@@ -775,7 +775,7 @@ These are deliberate consequences of ADR scope decisions, recorded so that revie
 | Check | Where | Frequency |
 |---|---|---|
 | Render health check on `/health` | Render | Continuously; gates every deploy |
-| Docker `HEALTHCHECK` | Local and CI containers | Every 30 seconds after a 10-second start period |
+| Docker `HEALTHCHECK` | Local and CI containers | Every 30 seconds after a 10-second start period (probing every 2 seconds during the start period, `--start-interval=2s`) |
 | Post-deploy manual check | Developer | Every release (AC-061) |
 
 ## 15.2 Diagnostics

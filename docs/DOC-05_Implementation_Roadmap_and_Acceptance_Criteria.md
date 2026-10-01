@@ -823,7 +823,7 @@ Milestone commit: `chore(milestone): complete M11 FastAPI serving layer`; tag `m
    - Write `docs/deployment.md` with the exact Render settings from DOC-04 §12.6 (image URL pattern, health check path `/health`, auto-deploy off, `HPP_LOG_LEVEL=INFO`, free instance type) and the release and rollback procedures from DOC-04 §12.3 and §17.4.
 6. **Do not push a smoke image or create the Render service with a smoke image.** Only release artifacts may run outside CI (SD-08, NFR-025). The first push and the first Render deploy happen in the M13 Release Run with the real image.
 
-**Files created.** `Dockerfile`, `.dockerignore`, `docs/deployment.md`.
+**Files created.** `Dockerfile`, `.dockerignore`, `docs/deployment.md`, `src/house_price/deploy.py` (the build, container-test and push logic behind the Make targets), `uv.lock` and `.python-version` (the locked runtime environment the image installs, DOC-05 §3.3–3.4).
 
 **Files modified.** `Makefile` (`docker-build`, `docker-test`, `docker-push`), `.github/workflows/ci.yml` (Docker stage).
 

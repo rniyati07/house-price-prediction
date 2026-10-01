@@ -1,14 +1,22 @@
-# CI (DOC-05 §5.5, RC-04; DOC-03 §16.3 DN-17): lint -> typecheck -> test -> smoke-train.
+# CI (DOC-05 §5.5, RC-04; DOC-03 §16.3 DN-17): lint -> typecheck -> test -> smoke-train ->
+# docker.
 #
 # CI has no dataset: tests marked `data` are skipped, and the smoke-train stage runs on the
 # committed synthetic fixture (tests/fixtures/synthetic_raw.csv) in an isolated project, so
-# the real holdout never exists here. Dependencies come from requirements.txt (there is no
-# uv lockfile; see the AC-033 note in reports/reproducibility/repro_check.json).
+# the real holdout never exists here. The jobs install requirements.txt plus the package,
+# whose runtime dependencies are pinned in pyproject.toml; the Docker image installs the
+# same runtime pins from uv.lock (`uv sync --frozen --no-dev`, DOC-04 §11.2).
+#
+# The docker job builds and tests the image with the smoke artifact only (SD-11). It has
+# read-only permissions, never logs in to a registry and never pushes (M12-5).
 name: ci
 
 on:
   push:
   pull_request:
+
+permissions:
+  contents: read
 
 env:
   PYTHON_VERSION: "3.12" # DOC-03 §10.7
@@ -78,3 +86,26 @@ jobs:
           name: smoke-model
           path: ${{ runner.temp }}/smoke/artifacts/smoke/model/
           if-no-files-found: error
+
+  docker:
+    needs: smoke-train
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read # no packages: write; this job cannot push
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+          cache: pip
+      - run: pip install -r requirements.txt && pip install -e .
+      - name: Download the smoke artifact (smoke-train job)
+        uses: actions/download-artifact@v4
+        with:
+          name: smoke-model
+          path: artifacts/smoke/model
+      - name: Build the image with the smoke artifact (label = metadata.model_version)
+        run: python -m house_price.deploy build --model-dir artifacts/smoke/model
+      - name: Container test (DOC-04 §16.5; HPP_ALLOW_NON_RELEASE=true, PORT=10000)
+        run: python -m house_price.deploy test --model-dir artifacts/smoke/model
+      # No docker login and no push: release images are pushed only in the M13 Release Run.

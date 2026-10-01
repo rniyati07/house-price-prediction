@@ -5,7 +5,46 @@ build-backend = "setuptools.build_meta"
 [project]
 name = "house-price"
 version = "0.1.0"
-requires-python = ">=3.11"
+requires-python = ">=3.12"
+# Runtime group (DOC-05 §3.4): what the service and the batch CLI import, and what an
+# unpickled artifact needs. Pinned exactly to the versions the M10 artifacts record in
+# metadata.library_versions (startup refuses any other version, DOC-04 §5.2 step 6).
+# uv.lock pins every package; the Docker image installs only this group
+# (`uv sync --frozen --no-dev`, DOC-04 §11.2).
+dependencies = [
+    "pandas==3.0.6",
+    "numpy==2.5.3",
+    "scipy==1.18.1",
+    "scikit-learn==1.9.1",
+    "lightgbm==4.7.0",
+    "joblib==1.6.0",
+    "pyyaml==6.0.3",
+    "pydantic==2.13.5",
+    "pandera==0.33.1",
+    "fastapi==0.141.1",
+    "uvicorn==0.54.0",
+]
+
+[dependency-groups]
+# Training (DOC-05 §3.4): tuning, tracking, figures. Not in the image.
+train = [
+    "optuna==5.0.0",
+    "mlflow==3.16.1",
+    "matplotlib==3.11.2",
+    "seaborn==0.13.2",
+]
+# Development: includes training, so `uv sync` installs everything and
+# `uv sync --no-dev` installs the runtime group only.
+dev = [
+    { include-group = "train" },
+    "pytest==9.1.1",
+    "pytest-cov==7.1.0",
+    "httpx==0.28.1",
+    "ruff==0.16.9",
+    "mypy==2.3.1",
+    "pre-commit",
+    "jupyter==1.1.1",
+]
 
 [project.scripts]
 house-price = "house_price.cli:main"
@@ -22,6 +61,9 @@ markers = [
 
 [tool.ruff]
 line-length = 100
+# Kept at the rule set used since M1 (it was inferred from requires-python >=3.11 before
+# the lockfile moved the floor to 3.12 in M12), so the lint baseline does not change.
+target-version = "py311"
 
 [tool.mypy]
 python_version = "3.12"

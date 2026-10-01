@@ -2,7 +2,7 @@
 # override it, e.g. `make test PYTHON=.venv/Scripts/python`.
 PYTHON ?= python
 
-.PHONY: setup lint format typecheck test validate-data split train evaluate smoke repro-check freeze serve predict
+.PHONY: setup lint format typecheck test validate-data split train evaluate smoke repro-check freeze serve predict docker-build docker-test docker-push
 
 setup:
 	$(PYTHON) -m pip install -r requirements.txt
@@ -76,3 +76,22 @@ serve:
 # 20 rows per file (MAX_BATCH_SIZE).
 predict:
 	HPP_ALLOW_NON_RELEASE=$(HPP_ALLOW_NON_RELEASE) $(PYTHON) -m house_price.cli predict --input $(INPUT) --output $(OUTPUT) --model-dir $(MODEL_DIR) --config-dir $(CONFIG_DIR)
+
+# Docker (M12, DOC-04 §11, §16.5, §17). Without VERSION the smoke artifact
+# artifacts/smoke/model is baked in (CI and local container tests only; never pushed);
+# with VERSION=x.y.z the frozen release models/x.y.z (M13). DOCKER_MODEL_DIR overrides.
+DOCKER_ARGS = $(if $(VERSION),--version $(VERSION)) $(if $(DOCKER_MODEL_DIR),--model-dir $(DOCKER_MODEL_DIR))
+
+# Two-stage build; fails unless the OCI version label equals metadata.model_version.
+docker-build:
+	$(PYTHON) -m house_price.deploy build $(DOCKER_ARGS)
+
+# Container test (DOC-04 §16.5 steps 2-6): default port and PORT=10000, /health, UID != 0,
+# example price == direct prediction, wrong HPP_MODEL_DIR fails startup, image contents.
+docker-test: docker-build
+	$(PYTHON) -m house_price.deploy test $(DOCKER_ARGS)
+
+# Release push to ghcr.io/<owner>/house-price-api:$(VERSION) (M13 only). Refuses smoke,
+# non-release and candidate artifacts, an existing tag, and CI. Needs docker login ghcr.io.
+docker-push:
+	$(PYTHON) -m house_price.deploy push --version $(VERSION)

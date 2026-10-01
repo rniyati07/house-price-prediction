@@ -1,0 +1,27 @@
+# Build context for the API image (DOC-04 §11.2). Allow-list: everything is excluded except
+# what the Dockerfile copies: the lockfile and project metadata, src/, configs/ and the
+# artifact directories MODEL_DIR may point at.
+#
+# This keeps data/ (raw dataset, split CSVs), mlruns/, notebooks/, reports/, results/,
+# tests/, docs/, .git/, .venv/ and every other local file out of the context.
+*
+
+!pyproject.toml
+!uv.lock
+!src/
+!configs/
+
+# MODEL_DIR: a frozen release models/x.y.z (M13) or the smoke artifact (CI and local tests
+# only; never pushed). Staging and candidate artifacts are never baked in.
+!models/
+models/staging/
+models/candidates/
+!artifacts/smoke/model/
+
+# Never inside an allowed directory either.
+**/__pycache__/
+**/*.pyc
+**/*.egg-info/
+**/.pytest_cache/
+**/.mypy_cache/
+**/.ruff_cache/
