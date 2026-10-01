@@ -283,3 +283,65 @@ def artifact_metadata(**overrides: object) -> object:
     }  # fmt: skip
     values.update(overrides)
     return metadata.ArtifactMetadata(**values)  # type: ignore[arg-type]
+
+
+# ------------------------------------------------------------------- serving (M11)
+
+API_EXAMPLE = CONFIG_DIR / "api_example.json"
+CONSISTENCY_CSV = REPO_ROOT / "tests" / "fixtures" / "consistency_rows.csv"
+
+
+@dataclass(frozen=True)
+class Serving:
+    """The smoke artifact of ``smoke_project`` (DN-17) and the repository's ``configs/``
+    (the same ``schema.yaml``; DOC-04 §16: a test artifact loaded with the override)."""
+
+    model_dir: Path
+    config_dir: Path
+
+    def settings(self, **overrides: object) -> object:
+        from house_price.api.settings import Settings
+
+        values: dict[str, object] = {"model_dir": self.model_dir, "config_dir": self.config_dir,
+                                     "allow_non_release": True}  # fmt: skip
+        values.update(overrides)
+        return Settings(**values)  # type: ignore[arg-type]
+
+
+@pytest.fixture(scope="session")
+def serving(smoke_project: SmokeProject) -> Serving:
+    return Serving(smoke_project.root / "artifacts" / "smoke" / "model", CONFIG_DIR)
+
+
+def api_example() -> dict[str, object]:
+    import json
+
+    example: dict[str, object] = json.loads(API_EXAMPLE.read_text(encoding="utf-8"))
+    return example
+
+
+def consistency_frame() -> pd.DataFrame:
+    """``consistency_rows.csv`` parsed and cast exactly like the raw file (DN-18): the 77
+    model inputs in schema order (development-set rows only)."""
+    from house_price.data.load import read_typed_csv
+
+    schema = load_project_config(CONFIG_DIR, REPO_ROOT).schema
+    cast = read_typed_csv(CONSISTENCY_CSV, schema, ["NA", ""], source_headers=False)
+    return select_model_input(cast.frame, schema)
+
+
+def as_json_records(frame: pd.DataFrame) -> list[dict[str, object]]:
+    """Rows as JSON request bodies: ``NaN`` -> ``null``, numpy scalars -> exact Python
+    ``int`` / ``float`` (no rounding, unlike ``DataFrame.to_json``)."""
+    records = []
+    for row in frame.to_dict("records"):
+        record: dict[str, object] = {}
+        for name, value in row.items():
+            if pd.isna(value):
+                record[str(name)] = None
+            elif hasattr(value, "item"):  # numpy scalar
+                record[str(name)] = value.item()
+            else:
+                record[str(name)] = value
+        records.append(record)
+    return records

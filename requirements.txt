@@ -18,6 +18,7 @@ seaborn
 
 pytest
 pytest-cov
+httpx  # FastAPI TestClient (M11 API tests)
 ruff
 mypy
 pre-commit

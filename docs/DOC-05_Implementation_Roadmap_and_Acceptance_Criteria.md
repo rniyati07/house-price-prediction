@@ -764,7 +764,7 @@ Milestone commit: `chore(milestone): complete M10 artifact machinery`; tag `m10-
 **Tasks.**
 1. Create `configs/api_example.json`: the 77 model inputs of one development-set row (SD-15), with `NaN` written as `null`.
 2. Implement `api/settings.py` (SD-08, including `HPP_ALLOW_NON_RELEASE`).
-3. Implement `api/schemas.py`: `build_request_models(schema)` with `create_model`, aliases (SD-02), all fields required, nullable as `T | None` (SD-01), strict numerics (SD-03), `Literal` categoricals, `extra="forbid"`; batch model with 1–100 items (SD-04); response models.
+3. Implement `api/schemas.py`: `build_request_models(schema)` with `create_model`, aliases (SD-02), all fields required, nullable as `T | None` (SD-01), strict numerics (SD-03), `Literal` categoricals, `extra="forbid"`; batch model with 1–20 items (SD-04; `MAX_BATCH_SIZE = 20`, project requirement change, originally 1–100, applied to the API and the batch CLI); response models.
 4. Implement `api/logging.py`: JSON formatter and the named events in DOC-04 §13.
 5. Implement `api/predict.py`: frame builder in schema order with `None` → `NaN`, the guard (SD-16), the domain flag from `metadata.scope_rule`, response assembly.
 6. Implement `api/errors.py`: 422 logging handler (locations and types only), generic 500 handler with `request_id`.
@@ -944,7 +944,7 @@ Tests are written in the milestone that creates the code they test. No milestone
 | Unit | One function or class behaves as specified | `tests/unit/` | `FeatureEngineer` formulas |
 | Integration | Several modules work together | `tests/integration/` | Tuning never opens the holdout |
 | Smoke | The whole training system runs end to end | `tests/integration/test_smoke_train.py`, CI stage | `train --smoke`, `evaluate --smoke` |
-| API | Endpoints follow their contracts | `tests/integration/test_api.py` | Batch of 101 → 422 |
+| API | Endpoints follow their contracts | `tests/integration/test_api.py` | Batch of 21 → 422 (M11 batch limit of 20; previously 101) |
 | Serving | Startup, consistency, and containment behave correctly | `tests/integration/test_startup.py`, consistency tests | Tampered artifact refused |
 | Docker | The image runs as designed | CI Docker stage, `make docker-test` | Non-root, `/health` 200 |
 | Quality gate | Real metrics meet targets | `tests/quality/` | Holdout log-RMSE ≤ 0.13 |

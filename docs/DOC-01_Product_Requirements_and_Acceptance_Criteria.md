@@ -5,6 +5,7 @@
 **Version:** 1.2
 **Status:** Approved baseline — revision 1.2 (dataset alignment: the project uses the full 2,930-row Ames file; see `docs/data_card.md`)
 **Date:** 2026-09-28
+**Approved project change (M11):** the batch prediction maximum is **20 records** (API batch endpoint and batch CLI), superseding the previous 100-record limit; see FR-043, FR-050, NFR-017, AC-051 and ADR-15.
 **Authoritative source:** `house-price-prediction-adr.md` (ADR-000: Foundational Decisions, ADR-01 to ADR-20)
 **Related documents:** DOC-02 Data Understanding and EDA
 
@@ -20,7 +21,7 @@ In a few places the ADR states an intent in qualitative terms (for example, "bea
 
 **Two kinds of criteria.** Every requirement and acceptance criterion in this document is one of:
 
-- **ADR-direct:** the threshold, count, tool, or procedure is stated in the ADR itself (for example: the scope rule, the 80/20 split, 5×3 repeated CV, the tuning budgets, holdout log-RMSE ≤ 0.13, MAPE ≤ 10%, 80% coverage, batch limit of 100, Python 3.12 slim, non-root container). These carry no label.
+- **ADR-direct:** the threshold, count, tool, or procedure is stated in the ADR itself (for example: the scope rule, the 80/20 split, 5×3 repeated CV, the tuning budgets, holdout log-RMSE ≤ 0.13, MAPE ≤ 10%, 80% coverage, batch limit of 20 (project change, M11; previously 100), Python 3.12 slim, non-root container). These carry no label.
 - **Interpretation:** DOC-01 adds precision the ADR does not literally specify (a numeric tolerance, a boundary case, a verification procedure, or an operational definition of a qualitative phrase). These carry an **IN-xx** tag where they appear, and are indexed below.
 
 **Interpretation note index.**
@@ -31,7 +32,7 @@ In a few places the ADR states an intent in qualitative terms (for example, "bea
 | IN-02 | FR-009, AC-011 | Holdout is locked and evaluated once [ADR-09] | EDA analyses relating features to `SalePrice` use the development set only |
 | IN-03 | FR-014, AC-018 | Transaction-outcome columns excluded [ADR-02] | `Id` and `PID` also excluded as record identifiers (the ADR does not name them) |
 | IN-04 | FR-015, AC-019 | Feature kept "only if a CV ablation shows it doesn't hurt" [ADR-07] | "Doesn't hurt" means: removing the feature does not lower mean CV log-RMSE |
-| IN-05 | FR-043, AC-051 | Batch endpoint accepts "up to 100" [ADR-15] | Lower bound of 1 property; an empty batch is rejected with 422 |
+| IN-05 | FR-043, AC-051 | Batch endpoint accepts "up to 20" [ADR-15; project change, M11: supersedes the previous 100-record limit] | Lower bound of 1 property; an empty batch is rejected with 422 |
 | IN-06 | AC-007 | 20% stratified holdout [ADR-09] | Holdout size is 20% of the in-scope rows, rounded down or up by the splitter; for 2,925 rows this is exactly 2,340/585 |
 | IN-07 | AC-009 | Stratified on binned log price [ADR-09] | Each bin's share differs by at most 2 percentage points between the sets |
 | IN-08 | AC-022 | Linear branch scales numeric features [ADR-08] | Scaled columns have mean ≈ 0 and SD ≈ 1 within 1e-6 on the fitting data |
@@ -330,7 +331,7 @@ Baseline reference scoring, as defined in Section 8.5, is not a second evaluatio
 
 **FR-042 — Single prediction.** `POST /predict` must accept one property in the full raw feature schema and return the predicted price in dollars, the model version, and the `out_of_domain` flag. [ADR-15]
 
-**FR-043 — Batch prediction endpoint.** `POST /predict/batch` must accept between 1 and 100 properties *(lower bound: Interpretation IN-05)* and return one prediction per property in input order, with the same fields as the single endpoint. Requests with more than 100 properties must be rejected. [ADR-15]
+**FR-043 — Batch prediction endpoint.** `POST /predict/batch` must accept between 1 and 20 properties *(lower bound: Interpretation IN-05; upper bound: project change, M11: supersedes the previous 100-record limit)* and return one prediction per property in input order, with the same fields as the single endpoint. Requests with more than 20 properties must be rejected. [ADR-15]
 
 **FR-044 — Request validation.** Requests must be validated against the full raw schema: fields that are legitimately NA in the dataset are nullable; all others are required; categorical fields are restricted to allowed values; numeric fields are range-checked. Invalid requests must receive HTTP 422 with a description of the problem. [ADR-04, ADR-15]
 
@@ -348,7 +349,7 @@ Baseline reference scoring, as defined in Section 8.5, is not a second evaluatio
 
 ## 6.16 Batch Prediction
 
-**FR-050 — Offline batch scoring.** A command-line entry point must read a CSV of properties in the raw schema, validate it against the same contract as the API, and write predictions (with `out_of_domain` flags) to an output file. [ADR-04, ADR-15]
+**FR-050 — Offline batch scoring.** A command-line entry point must read a CSV of properties in the raw schema, validate it against the same contract as the API, and write predictions (with `out_of_domain` flags) to an output file. A file may contain 1 to 20 rows, the same limit as the batch endpoint *(project change, M11: supersedes the previous 100-record limit)*. [ADR-04, ADR-15]
 
 ## 6.17 Documentation
 
@@ -424,7 +425,7 @@ Baseline reference scoring, as defined in Section 8.5, is not a second evaluatio
 
 **NFR-016 — Laptop-scale training.** The complete training workflow, including all tuning budgets, must run on a standard laptop without specialized hardware, with each tuning study completing in minutes. [ADR-13]
 
-**NFR-017 — Serving efficiency.** The model must be loaded once at startup, batch requests are capped at 100 properties, and per-request latency must be measured and logged. [ADR-15]
+**NFR-017 — Serving efficiency.** The model must be loaded once at startup, batch requests are capped at 20 properties *(project change, M11: supersedes the previous 100-record limit)*, and per-request latency must be measured and logged. [ADR-15]
 
 *Interpretation note (IN-13):* the ADR sets no latency target and excludes load testing [ADR-15, ADR-18]. This document therefore requires latency to be measured and recorded, but does not impose a latency SLO. Adding one would be a new architectural decision.
 
@@ -646,7 +647,7 @@ Any discrete difference (items 1–3), or any CV metric difference larger than 1
 
 **AC-050.** `POST /predict` with the documented example payload returns HTTP 200 and a body containing a positive predicted price in dollars, the model version from metadata, and `out_of_domain: false`. *Verify:* API test.
 
-**AC-051** *(0-property case: Interpretation IN-05)*. `POST /predict/batch` with 100 valid properties returns HTTP 200 and 100 predictions in input order; with 101 properties it returns HTTP 422; with 0 properties it returns HTTP 422. *Verify:* API tests.
+**AC-051** *(0-property case: Interpretation IN-05)*. `POST /predict/batch` with 20 valid properties returns HTTP 200 and 20 predictions in input order; with 21 properties it returns HTTP 422 *(project change, M11: supersedes the previous 100-record limit)*; with 0 properties it returns HTTP 422. *Verify:* API tests.
 
 **AC-052.** Each of the following requests returns HTTP 422 and no prediction: a required field missing; a categorical field with a disallowed value; a numeric field outside its allowed range; a non-numeric value in a numeric field; `null` in a non-nullable field. *Verify:* API tests (5 cases).
 

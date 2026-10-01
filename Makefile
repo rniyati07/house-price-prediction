@@ -2,7 +2,7 @@
 # override it, e.g. `make test PYTHON=.venv/Scripts/python`.
 PYTHON ?= python
 
-.PHONY: setup lint format typecheck test validate-data split train evaluate smoke repro-check freeze
+.PHONY: setup lint format typecheck test validate-data split train evaluate smoke repro-check freeze serve predict
 
 setup:
 	$(PYTHON) -m pip install -r requirements.txt
@@ -57,3 +57,22 @@ repro-check:
 # QG-16 passes (DOC-03 §16.2). M13 Release Run only.
 freeze:
 	$(PYTHON) -m house_price.cli freeze --version $(VERSION)
+
+# Serving (M11, DOC-04 §18.3). MODEL_DIR is the artifact directory: models/$(VERSION) for a
+# frozen release; for the smoke artifact (never released) also pass
+# HPP_ALLOW_NON_RELEASE=true, e.g.
+#   make serve MODEL_DIR=artifacts/smoke/model HPP_ALLOW_NON_RELEASE=true
+MODEL_DIR ?= models/$(VERSION)
+PORT ?= 8000
+HPP_ALLOW_NON_RELEASE ?= false
+
+# Uvicorn, one worker, structured logs only (SD-09); the lifespan verifies the artifact
+# before the service accepts requests (DOC-04 §5).
+serve:
+	HPP_MODEL_DIR=$(MODEL_DIR) HPP_CONFIG_DIR=$(CONFIG_DIR) HPP_ALLOW_NON_RELEASE=$(HPP_ALLOW_NON_RELEASE) PORT=$(PORT) $(PYTHON) -m uvicorn house_price.api.app:app --host 127.0.0.1 --port $(PORT) --workers 1 --no-access-log
+
+# Batch CLI (DOC-04 §10): make predict INPUT=properties.csv OUTPUT=predictions.csv
+# Exit codes 0 success, 2 invalid input (no output written), 3 runtime failure; at most
+# 20 rows per file (MAX_BATCH_SIZE).
+predict:
+	HPP_ALLOW_NON_RELEASE=$(HPP_ALLOW_NON_RELEASE) $(PYTHON) -m house_price.cli predict --input $(INPUT) --output $(OUTPUT) --model-dir $(MODEL_DIR) --config-dir $(CONFIG_DIR)

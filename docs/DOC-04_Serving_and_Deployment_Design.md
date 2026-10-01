@@ -279,12 +279,12 @@ On SIGTERM, Uvicorn stops accepting connections and finishes in-flight requests;
 
 ## 6.5 `POST /predict/batch`
 
-- **Purpose:** price 1 to 100 properties in one call (FR-043).
+- **Purpose:** price 1 to 20 properties in one call (FR-043; project requirement change, M11: originally 100 [ADR-15]).
 - **Request body (SD-04):**
 
 | Field | Type | Rule |
 |---|---|---|
-| `properties` | array of `PropertyInput` | Length 1 to 100 inclusive (upper bound [ADR-15]; lower bound IN-05); `extra="forbid"` at the top level too |
+| `properties` | array of `PropertyInput` | Length 1 to 20 inclusive (upper bound `MAX_BATCH_SIZE = 20`, project requirement change, M11: originally 100 [ADR-15]; lower bound IN-05); `extra="forbid"` at the top level too |
 
 - **Response 200:**
 
@@ -298,14 +298,14 @@ On SIGTERM, Uvicorn stops accepting connections and finishes in-flight requests;
 | `predictions[i].out_of_domain` | boolean | As in `/predict` |
 
 - **Validation behavior:** validation is **atomic**: if any property is invalid, the whole request receives 422 and nothing is predicted. The error `loc` identifies the failing item (for example `["body", "properties", 7, "PoolQC"]`). Atomic validation keeps the response simple (every item has a prediction) and prevents clients from silently ignoring rejected rows.
-- **Error behavior:** 0 items or more than 100 → 422 (AC-051). All properties are predicted in one `pipeline.predict` call on an n-row frame; if the SD-16 guard fails for any row, the request returns 500.
+- **Error behavior:** 0 items or more than 20 → 422 (AC-051, with the M11 limit of 20). All properties are predicted in one `pipeline.predict` call on an n-row frame; if the SD-16 guard fails for any row, the request returns 500.
 - **Verifies:** AC-051.
 
 ## 6.6 Error Model (SD-05)
 
 | Status | When | Body |
 |---|---|---|
-| 422 | Any request validation failure: missing field, extra field, wrong type, disallowed category, out-of-range number, `null` in a non-nullable field, batch size outside 1–100, malformed JSON | FastAPI's standard body: `{"detail": [{"type", "loc", "msg", "input", ...}, ...]}` |
+| 422 | Any request validation failure: missing field, extra field, wrong type, disallowed category, out-of-range number, `null` in a non-nullable field, batch size outside 1–20, malformed JSON | FastAPI's standard body: `{"detail": [{"type", "loc", "msg", "input", ...}, ...]}` |
 | 404 / 405 | Unknown path or wrong method | FastAPI defaults |
 | 500 | Unexpected exception or SD-16 guard violation | `{"detail": "Internal server error", "request_id": "<uuid>"}`; no stack trace, no input echo |
 
@@ -425,7 +425,7 @@ sequenceDiagram
     participant Lg as JSON logger
 
     C->>V: POST /predict/batch {"properties": [p0 … pn-1]}
-    alt n < 1 or n > 100 or any item invalid
+    alt n < 1 or n > 20 or any item invalid
         V-->>C: 422 (loc points at the failing item)
     else all valid
         V->>E: BatchInput
@@ -523,7 +523,7 @@ Rows are in input order.
 
 | Limit | Value | Why |
 |---|---|---|
-| Rows per file | No enforced limit; designed for files up to tens of thousands of rows in memory | The ADR's 100-item cap applies to the API [ADR-15]; the CLI is an offline tool on the user's own machine |
+| Rows per file | 1 to 20 rows (`MAX_BATCH_SIZE`); a larger or empty file is invalid input (exit code 2, no output) | Project requirement change, M11: the CLI applies the same batch limit as the API (DOC-04 originally set no CLI limit and a 100-item API cap [ADR-15]) |
 | Memory | The whole file is loaded at once | Simplicity; the dataset scale does not justify chunking |
 | Model | Exactly one model version per run, recorded in every output row | Traceability (NFR-029) |
 
@@ -747,8 +747,8 @@ One line per prediction request, `prediction.completed` (FR-047, AC-056):
 
 ## 14.3 Batch Limits
 
-- API: 1 to 100 properties per request [ADR-15, IN-05], enforced by Pydantic list-length constraints before prediction.
-- The batch is predicted in one vectorized call, so its cost grows linearly and stays small at 100 rows.
+- API and batch CLI: 1 to 20 properties per request or file (`MAX_BATCH_SIZE`; project requirement change, M11: originally 100 [ADR-15]; IN-05), enforced by Pydantic list-length constraints (API) and the CLI's input check before prediction.
+- The batch is predicted in one vectorized call, so its cost grows linearly and stays small at 20 rows.
 
 ## 14.4 Startup Verification
 
@@ -761,7 +761,7 @@ These are deliberate consequences of ADR scope decisions, recorded so that revie
 | Risk | Why accepted |
 |---|---|
 | No authentication | Public demo service over public data; authentication is outside ADR-15's scope |
-| No rate limiting | No traffic worth protecting against at this scale [ADR-18]; the 100-item batch cap limits per-request cost |
+| No rate limiting | No traffic worth protecting against at this scale [ADR-18]; the 20-item batch cap limits per-request cost |
 | No explicit request-body size limit | Bounded in practice by the batch cap and the field set; adding a limit is not an ADR decision |
 | Cold starts on the free tier | Accepted by ADR-15 |
 | Model is valid only for Ames, 2006–2010, homes ≤ 4,000 sq ft | Enforced where possible: `YrSold` range and the `out_of_domain` flag; documented in the model card |
@@ -810,7 +810,7 @@ All tests run under pytest in CI [ADR-18]. Serving tests use FastAPI's `TestClie
 | `test_health` | 200, `status` ok, version matches metadata | AC-048 |
 | `test_model_info_equals_metadata` | Body equals `metadata.json` | AC-049 |
 | `test_predict_example` | 200; positive price; version; `out_of_domain=false` | AC-050 |
-| `test_batch_100_ok`, `test_batch_101_rejected`, `test_batch_empty_rejected` | Order preserved; 422 on 101 and 0 | AC-051 |
+| `test_batch_20_ok_and_order_preserved`, `test_batch_21_rejected`, `test_batch_empty_rejected` | Order preserved; 422 on 21 and 0 (M11 limit of 20) | AC-051 |
 | `test_predict_rejects_*` (5 cases) | Missing field; disallowed category; out of range; non-numeric in numeric; `null` in non-nullable | AC-052 |
 | `test_predict_accepts_nullable_null` | `PoolQC: null` → 200 | AC-053 |
 | `test_out_of_domain_boundary` | 4000 → false; 4001 → true | AC-054 |
