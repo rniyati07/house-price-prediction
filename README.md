@@ -38,44 +38,86 @@ The design is specified in five documents (`docs/DOC-01` … `DOC-05`, see [Docu
 
 ## Architecture
 
-### Serving
+One connected view of the whole system, from the raw dataset to a client calling the API. Solid nodes exist and have been verified locally; **dashed orange nodes are pending and belong to the M13 Release Run**.
 
 ```mermaid
-flowchart TD
-    A["Client / CSV file"] --> B["FastAPI service or batch CLI"]
-    B --> C["Pydantic request validation"]
-    C --> D["Shared 77-feature contract (schema.yaml)"]
-    D --> E["Verified model artifact (SHA-256, library versions)"]
-    E --> F["Frozen preprocessing pipeline"]
-    F --> G["Regression model"]
-    G --> H["Predicted SalePrice (dollars) + out_of_domain flag"]
+flowchart TB
+    subgraph DATA["Data & EDA"]
+        A["Ames dataset<br/>2,930 rows, SHA-256 verified"] --> B["Validation, scope rule and EDA<br/>Pandera schema, reports, notebooks"]
+        B --> S["Persisted split, seed 42<br/>2,340 development / 585 holdout"]
+    end
+
+    subgraph TRAIN["ML Training - development set only"]
+        FE["Feature engineering<br/>12 approved features, per-branch ablation"] --> PP["Model-family preprocessing<br/>linear and tree branches"]
+        PP --> CV["Repeated 5x3 CV and tuning<br/>grids and Optuna"]
+        CV --> SEL["Model selection<br/>1-SE rule, tiers, blend admission"]
+    end
+
+    subgraph OPS["MLOps & Artifacts"]
+        MLF["MLflow tracking<br/>local file store, lineage tags"]
+        ART["Model artifact + metadata<br/>SHA-256, library versions, schema hash<br/>smoke / unreleased so far"]
+        VER["Artifact verification<br/>hash, libraries, schema, release flag"]
+        FRZ["Final holdout evaluation, refit, freeze<br/>PENDING - M13"]
+        CI["GitHub Actions CI<br/>lint, types, tests, smoke train, Docker test"]
+    end
+
+    subgraph SERVE["Serving"]
+        CON["Pydantic 77-feature contract<br/>generated from schema.yaml"]
+        API["FastAPI service<br/>health, model-info, predict, predict/batch up to 20"]
+        BCLI["Batch CLI<br/>house-price predict"]
+        PRED["Verified pipeline.predict<br/>dollar price + out_of_domain flag"]
+    end
+
+    subgraph DEPLOY["Deployment"]
+        IMG["Docker image<br/>two-stage, non-root, artifact baked in"]
+        GHCR["GHCR release push<br/>PENDING - M13"]
+        REN["Render web service<br/>PENDING - M13"]
+    end
+
+    subgraph CLIENT["Client"]
+        CL["Client or CSV file"]
+    end
+
+    S --> FE
+    CV -->|"runs, metrics"| MLF
+    SEL -->|"selection record"| MLF
+    SEL -->|"evaluate: refit + metadata"| ART
+    SEL -.->|"selected model"| FRZ
+    S -.->|"locked holdout, used once"| FRZ
+    FRZ -.->|"release artifact models/x.y.z"| ART
+
+    ART --> VER
+    VER -->|"verified load at startup"| API
+    VER -->|"verified load"| BCLI
+    CON --> API
+    CON --> BCLI
+    API --> PRED
+    BCLI --> PRED
+
+    CL -->|"JSON request"| API
+    CL -->|"CSV file"| BCLI
+    PRED -->|"prediction response"| CL
+
+    ART -->|"MODEL_DIR baked in"| IMG
+    API -.->|"packaged in"| IMG
+    IMG -.->|"release image"| GHCR
+    GHCR -.->|"pull exact tag"| REN
+    REN -.->|"public HTTPS API"| CL
+    CI -->|"build and test with smoke artifact, never pushes"| IMG
+
+    classDef pending fill:#fff4e0,stroke:#cc6600,stroke-dasharray:5 5,color:#333
+    class FRZ,GHCR,REN pending
 ```
 
-### Training and selection
+### Architecture at a glance
 
-```mermaid
-flowchart TD
-    A["Raw Ames data (SHA-256 verified)"] --> B["Validation"]
-    B --> C["Scope filtering: GrLivArea <= 4000"]
-    C --> D["Development / holdout split (seed 42)"]
-    D --> E["Feature engineering"]
-    E --> F["Model-family preprocessing"]
-    F --> G["Repeated 5x3 CV and tuning"]
-    G --> H["Model selection (1-SE rule)"]
-    H --> I["Artifact persistence + metadata"]
-    I --> J["FastAPI + Docker"]
-```
-
-### Deployment (target design; not yet executed)
-
-```mermaid
-flowchart TD
-    A["Frozen artifact: models/x.y.z"] --> B["docker build (MODEL_DIR, MODEL_VERSION)"]
-    B --> C["Local container test"]
-    C --> D["GHCR: ghcr.io/OWNER/house-price-api:x.y.z"]
-    D --> E["Render Web Service (prebuilt image)"]
-    E --> F["FastAPI service over HTTPS"]
-```
+- **Data & EDA:** the raw Ames file is hash-checked, validated against `configs/schema.yaml`, scoped to `GrLivArea <= 4000`, and split once (seed 42) into 2,340 development and 585 locked holdout rows.
+- **ML Training:** features, preprocessing, repeated 5×3 CV and tuning use the development set only; selection follows a documented one-standard-error rule, and the currently selected development model is the Ridge + LightGBM blend.
+- **MLOps & Artifacts:** every run is tracked in a local MLflow file store; the artifact is a single fitted pipeline plus `metadata.json` (hashes, library versions, schema hash, role). Only the smoke (unreleased) artifact exists today.
+- **One contract, two entry points:** the 77-feature Pydantic contract is generated from the same `schema.yaml` as the training schemas and guards both the FastAPI service and the batch CLI, which load the artifact only after verification and call `pipeline.predict` without re-implementing preprocessing.
+- **Serving:** `/health`, `/model-info`, `/predict` and `/predict/batch` (1–20 properties) return dollar prices with an `out_of_domain` flag for `GrLivArea > 4000`.
+- **Deployment:** a two-stage, non-root Docker image bakes in one artifact; GitHub Actions builds and tests it with the smoke artifact and never pushes.
+- **Pending (M13):** the single final holdout evaluation, final refit and freeze, the release image push to GHCR, and the Render deployment have **not** happened; there is no live API yet.
 
 ## Dataset
 
