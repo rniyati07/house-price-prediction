@@ -17,6 +17,7 @@ matplotlib
 seaborn
 
 pytest
+pytest-cov
 ruff
 mypy
 pre-commit

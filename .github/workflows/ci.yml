@@ -49,7 +49,8 @@ jobs:
           python-version: ${{ env.PYTHON_VERSION }}
           cache: pip
       - run: pip install -r requirements.txt && pip install -e .
-      - run: pytest -q
+      - name: pytest with the coverage threshold (DOC-05 M10)
+        run: pytest -q --cov=house_price --cov-report=term-missing:skip-covered --cov-fail-under=80
 
   smoke-train:
     needs: test
@@ -69,5 +70,11 @@ jobs:
         run: rm "$RUNNER_TEMP/smoke/data/processed/holdout.csv"
       - name: train --smoke
         run: house-price train --smoke --root "$RUNNER_TEMP/smoke"
-      - name: evaluate --smoke
+      - name: evaluate --smoke (final evaluation on the substitute, gates, temporal, refit)
         run: house-price evaluate --smoke --root "$RUNNER_TEMP/smoke"
+      - name: Keep the smoke artifact for the Docker stage (M12)
+        uses: actions/upload-artifact@v4
+        with:
+          name: smoke-model
+          path: ${{ runner.temp }}/smoke/artifacts/smoke/model/
+          if-no-files-found: error

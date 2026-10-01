@@ -16,7 +16,21 @@ Preconditions (DOC-03 §12.2), all checked before anything is read or fitted:
 Then: fit the selected configuration on the development set, predict the holdout once, log
 ``run_kind=final_holdout_evaluation``; score each baseline once (``baseline_reference``);
 check the quality gates (``quality_gates``); run the temporal diagnostic on development rows
-(``temporal_diagnostic``). Refitting on all 2,925 rows and the artifact are M10.
+(``temporal_diagnostic``); then the production refit (M10, FR-034, FR-038, FR-039): the
+selected configuration is refit on all in-scope rows (development + holdout, 2,925) and
+written to ``models/staging/`` with ``metadata.json``, the exact round trip is checked on the
+development set, and the run is logged as ``run_kind=production_refit``.
+
+Smoke mode refits on the smoke development sample only (the holdout substitute stays
+separate) and writes to ``artifacts/smoke/model/``; the refit run is in ``hpp-smoke``, which
+is how ``freeze`` recognises and refuses a smoke artifact (DN-17, DOC-03 §16.2 step 3).
+
+Candidate reference artifacts (additional project requirement, M10): after the production
+refit, each of the four tuned candidates is refit once, on the same rows, with its tuned
+parameters from the run's ``_best.json`` (checked against the selection record's
+``pipeline_run_id``), and written to ``models/candidates/<name>/`` (smoke:
+``artifacts/smoke/candidates/<name>/``) with ``artifact_role="candidate"`` metadata. They are
+never scored on the holdout, never influence selection, and are never released.
 """
 
 from __future__ import annotations
@@ -39,13 +53,15 @@ from house_price.config import (
 )
 from house_price.data.errors import DataError
 from house_price.data.load import load_raw, read_typed_csv, sha256_file
+from house_price.data.profile import utc_now
 from house_price.data.schema import select_model_input, validate_raw
 from house_price.data.scope import apply_scope_rule
 from house_price.data.split import create_or_load_split
 from house_price.evaluation import gates, temporal
 from house_price.evaluation.metrics import all_metrics
 from house_price.models import selection
-from house_price.models.registry import baseline_candidates
+from house_price.models.registry import baseline_candidates, registry
+from house_price.persistence import artifact, metadata
 from house_price.results import start_run
 from house_price.tracking import Lineage, Tracker, default_tracking_uri, git_state
 
@@ -65,13 +81,19 @@ class EvaluationPaths:
     selection_dir: Path
     evaluation_dir: Path
     smoke_split: Path | None
+    model_dir: Path
+    candidates_dir: Path
+    tuning_dir: Path
 
     @classmethod
     def for_mode(cls, root: Path, smoke: bool) -> EvaluationPaths:
         if smoke:
             base = root / SMOKE_DIR
-            return cls(base / "selection", base / "evaluation", base / SMOKE_SPLIT_NAME)
-        return cls(root / selection.SELECTION_DIR, root / EVALUATION_DIR, None)
+            return cls(base / "selection", base / "evaluation", base / SMOKE_SPLIT_NAME,
+                       base / "model", base / "candidates", base / "tuning")  # fmt: skip
+        return cls(root / selection.SELECTION_DIR, root / EVALUATION_DIR, None,
+                   root / artifact.STAGING_DIR, root / artifact.CANDIDATES_DIR,
+                   root / "artifacts/tuning")  # fmt: skip
 
 
 @dataclass
@@ -164,7 +186,7 @@ def run_evaluate(
     root = (root or Path.cwd()).resolve()
     config_dir = config_dir or root / DEFAULT_CONFIG_DIR
     paths = EvaluationPaths.for_mode(root, smoke)
-    with start_run("M9", root=root, entry_point="house-price evaluate", argv=argv) as run_record:
+    with start_run("M10", root=root, entry_point="house-price evaluate", argv=argv) as run_record:
         config = load_project_config(config_dir, root)
         features, models = load_feature_config(config_dir), load_models_config(config_dir)
         schema, seed = config.schema, config.validation.seed
@@ -271,6 +293,41 @@ def run_evaluate(
             run.log_metrics(
                 {**tresult.metrics, "mean_signed_log_error": tresult.mean_signed_log_error}
             )
+        temporal_run_id = run.run_id
+
+        # ---------------------------------------------------- production refit (M10)
+        refit_rows = dev if smoke else pd.concat([dev, holdout], ignore_index=True)
+        log(f"production refit of {record['selected']['name']} on {len(refit_rows)} rows "
+            f"({'smoke development sample' if smoke else 'all in-scope rows'})")  # fmt: skip
+        with tracker.run("evaluation", stage="evaluation", candidate=record["selected"]["name"],
+                         run_name="production_refit", run_kind="production_refit",
+                         extra_tags=tags) as run:  # fmt: skip
+            model = build()
+            model.fit(select_model_input(refit_rows, schema), refit_rows[schema.target])
+            model_sha = artifact.save_model(model, paths.model_dir)
+            trip = artifact.round_trip(model, paths.model_dir / artifact.MODEL_FILE,
+                                       select_model_input(dev, schema))  # fmt: skip
+            meta = _staging_metadata(
+                model, record, config, features, models, lineage, tresult.as_record(),
+                final, reference, gate_report, model_sha, len(refit_rows),
+                {"refit": run.run_id, "final_holdout_evaluation": final_run_id},
+            )  # fmt: skip
+            meta_path = artifact.write_metadata(meta, paths.model_dir)
+            run.log_params({"training_rows": len(refit_rows), "model_sha256": model_sha,
+                            "round_trip_passed": trip.passed})  # fmt: skip
+            run.log_metrics({"round_trip_max_abs_difference": trip.max_abs_difference})
+            run.log_artifact(meta_path)
+            if not trip.passed:
+                raise EvaluationError(
+                    f"round trip failed: max |difference| {trip.max_abs_difference}"
+                )
+            # ------------------------- candidate reference refits (additional requirement)
+            candidates = _refit_candidates(
+                paths, record, config, features, models, meta, refit_rows, dev, schema, log
+            )
+            for name, info in candidates.items():
+                run.log_artifact(Path(info["metadata"]), artifact_path=f"candidates/{name}")
+        refit_run_id = run.run_id
         summary = {
             "selection_record_id": record_id,
             "smoke": smoke,
@@ -283,14 +340,136 @@ def run_evaluate(
                 "final_holdout_evaluation": final_run_id,
                 "baseline_reference": baseline_run_id,
                 "quality_gates": gates_run_id,
-                "temporal_diagnostic": run.run_id,
+                "temporal_diagnostic": temporal_run_id,
+                "production_refit": refit_run_id,
             },
             "experiment": tracker.experiment_name("evaluation"),
-            "not_in_m9": "refit on all rows and the model artifact are M10",
+            "production_refit": {
+                "model_dir": str(paths.model_dir),
+                "model_sha256": model_sha,
+                "training_rows": len(refit_rows),
+                "round_trip": trip.as_record(),
+                "is_release": False,
+                "model_version": meta.model_version,
+            },
+            "candidate_refits": candidates,
         }
         summary_path = paths.evaluation_dir / "evaluation_summary.json"
         summary_path.write_text(json.dumps(summary, indent=2) + "\n", encoding="utf-8")
         run_record.log_value("evaluation", summary)
-        for path in (gate_path, temporal_path, summary_path):
+        for path in (gate_path, temporal_path, summary_path, meta_path):
             run_record.log_artifact(path)
         return summary
+
+
+TUNED = ("ridge", "lasso", "random_forest", "lightgbm")
+
+
+def _refit_candidates(
+    paths: EvaluationPaths,
+    record: dict[str, Any],
+    config: ProjectConfig,
+    features: Any,
+    models: Any,
+    production: metadata.ArtifactMetadata,
+    rows: pd.DataFrame,
+    dev: pd.DataFrame,
+    schema: Any,
+    log: Log,
+) -> dict[str, dict[str, Any]]:
+    """Post-selection reference refits of the four tuned candidates (never evaluated on the
+    holdout, never released). Provenance is shared with the production refit; everything
+    that describes a model describes the candidate itself."""
+    candidates = registry(models, config.validation.seed)
+    folds = {c["name"]: c for c in record["candidates"]}
+    X_rows, X_dev = select_model_input(rows, schema), select_model_input(dev, schema)
+    results: dict[str, dict[str, Any]] = {}
+    for name in TUNED:
+        best_path = paths.tuning_dir / f"{name}_best.json"
+        if not best_path.is_file():
+            raise EvaluationError(f"tuned configuration not found: {best_path}")
+        best = json.loads(best_path.read_text(encoding="utf-8"))
+        if best["lineage"]["pipeline_run_id"] != record["pipeline_run_id"]:
+            raise EvaluationError(f"{best_path} is from pipeline run "
+                                  f"{best['lineage']['pipeline_run_id']}, not the selection's "
+                                  f"{record['pipeline_run_id']}")  # fmt: skip
+        log(f"candidate reference refit: {name} on {len(rows)} rows")
+        model = candidates[name].build(features, schema, best["best_params"])
+        model.fit(X_rows, rows[schema.target])
+        directory = paths.candidates_dir / name
+        sha = artifact.save_model(model, directory)
+        trip = artifact.round_trip(model, directory / artifact.MODEL_FILE, X_dev)
+        if not trip.passed:
+            raise EvaluationError(f"{name}: round trip failed ({trip.max_abs_difference})")
+        scores = folds[name]
+        meta = metadata.ArtifactMetadata.model_validate({
+            **production.model_dump(),
+            "artifact_role": "candidate", "model_sha256": sha, "created_at": utc_now(),
+            "selected_candidate": name,
+            "hyperparameters": {"tuned_params": best["best_params"],
+                                "estimator_params": best["estimator_params"]},
+            "feature_sets": metadata.feature_sets({name: candidates[name].branch}, features),
+            "transformed_feature_names": metadata.transformed_feature_names(model, name),
+            "cv": {"mean": scores["mean"], "se": scores["se"],
+                   "n_folds": float(len(scores["fold_scores"]))},
+            "holdout": None, "baseline_reference": None, "temporal_diagnostic": None,
+            "quality_gates": None,
+            "mlflow": {**production.mlflow.model_dump(), "final_holdout_evaluation": None},
+        })  # fmt: skip
+        empty = meta.empty_fields()
+        if empty:
+            raise EvaluationError(f"{name}: incomplete candidate metadata {empty}")
+        meta_path = artifact.write_metadata(meta, directory)
+        results[name] = {"dir": str(directory), "model_sha256": sha, "training_rows": len(rows),
+                         "round_trip": trip.as_record(), "metadata": str(meta_path)}  # fmt: skip
+    return results
+
+
+def _staging_metadata(
+    model: Any,
+    record: dict[str, Any],
+    config: ProjectConfig,
+    features: Any,
+    models: Any,
+    lineage: Lineage,
+    temporal_record: dict[str, Any],
+    final: dict[str, float],
+    reference: dict[str, dict[str, float]],
+    gate_report: dict[str, Any],
+    model_sha: str,
+    training_rows: int,
+    runs: dict[str, str],
+) -> metadata.ArtifactMetadata:
+    """DOC-03 §15.3 metadata of the staging artifact (``model_version`` "unreleased",
+    ``is_release`` false, ``mlflow.release`` null until ``freeze``)."""
+    import platform
+
+    selected = record["selected"]
+    name, hp = selected["name"], selected["hyperparameters"]
+    candidates = registry(models, config.validation.seed)
+    components = ({hp["linear"]: candidates[hp["linear"]].branch, hp["tree"]: candidates[hp["tree"]].branch}
+                  if name == selection.BLEND_NAME else {name: candidates[name].branch})  # fmt: skip
+    folds = next(c for c in record["candidates"] if c["name"] == name)["fold_scores"]
+    columns = metadata.input_schema(config.schema)
+    return metadata.ArtifactMetadata(
+        model_version=metadata.UNRELEASED, is_release=False, model_sha256=model_sha,
+        created_at=utc_now(), git_commit=lineage.git_commit, git_dirty=lineage.git_dirty,
+        data_sha256=lineage.data_sha256, split_manifest_sha256=lineage.split_manifest_sha256,
+        config_hash=lineage.config_hash, pipeline_run_id=record["pipeline_run_id"],
+        selection_record_id=record["selection_record_id"],
+        mlflow=metadata.MlflowLinks(**runs, release=None),
+        python_version=platform.python_version(), library_versions=artifact.library_versions(),
+        selected_candidate=name, hyperparameters=hp,
+        feature_sets=metadata.feature_sets(components, features),
+        transformed_feature_names=metadata.transformed_feature_names(model, name),
+        target_transform={"func": model.func.__name__, "inverse_func": model.inverse_func.__name__},
+        training_rows=training_rows,
+        cv={"mean": selected["mean"], "se": selected["se"], "n_folds": float(len(folds))},
+        holdout=final, baseline_reference={b: m["log_rmse"] for b, m in reference.items()},
+        temporal_diagnostic=temporal_record, quality_gates=gate_report["rules"],
+        input_schema=columns, schema_hash=metadata.schema_hash(columns),
+        scope_rule=metadata.ScopeRule(column=config.data.scope.column,
+                                      max_in_domain=config.data.scope.threshold),
+        seed=config.validation.seed,
+        reproducibility_tolerance=config.validation.reproducibility_tolerance,
+    )  # fmt: skip

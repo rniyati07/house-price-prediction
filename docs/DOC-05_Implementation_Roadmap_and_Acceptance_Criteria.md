@@ -721,6 +721,7 @@ Milestone commit: `chore(milestone): complete M9 model selection and evaluation 
 5. Add `make freeze`. Extend the CI smoke stage to run `evaluate --smoke` and keep the smoke artifact as a CI job artifact for the Docker stage (M12).
 6. Turn on the coverage threshold: `--cov-fail-under=80` in `make test` and CI.
 7. Declare the **training-code freeze** (Section 6.5): from now on, changes to `data/`, `features/`, `pipelines/`, `models/`, `evaluation/`, `persistence/`, or training configuration require re-running `make train` and the M9 review before the release.
+8. *(Additional project requirement.)* After the production refit, persist one post-selection reference refit of each tuned candidate (Ridge, Lasso, Random Forest, LightGBM) in `models/candidates/<name>/` with `artifact_role = "candidate"` metadata (DOC-03 §15.1, §15.3). These are never released, served, or scored on the holdout.
 
 **Files created.** `src/house_price/persistence/{metadata,artifact}.py`, `tests/integration/test_artifact.py`, `tests/unit/test_freeze.py`, `tests/unit/test_metadata.py`.
 

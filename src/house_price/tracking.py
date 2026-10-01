@@ -153,9 +153,10 @@ class TrackedRun:
             self.run_id, key, str(value).lower() if isinstance(value, bool) else str(value)
         )
 
-    def log_artifact(self, path: Path) -> None:
-        """Attach a file (e.g. the ablation table, DOC-03 §14.6) to the run."""
-        self._client.log_artifact(self.run_id, str(path))
+    def log_artifact(self, path: Path, artifact_path: str | None = None) -> None:
+        """Attach a file (e.g. the ablation table, DOC-03 §14.6) to the run, optionally
+        under ``artifact_path`` (e.g. one folder per candidate artifact)."""
+        self._client.log_artifact(self.run_id, str(path), artifact_path)
 
 
 class Tracker:

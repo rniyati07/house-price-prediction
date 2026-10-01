@@ -988,12 +988,16 @@ models/
 ├── staging/                 # written by `evaluate`; overwritten on each evaluate run
 │   ├── model.joblib
 │   └── metadata.json
+├── candidates/              # additional project requirement (M10); reference artifacts only
+│   └── <ridge|lasso|random_forest|lightgbm>/{model.joblib, metadata.json}
 └── 1.0.0/                   # written by `freeze`; never modified afterwards
     ├── model.joblib
     └── metadata.json
 ```
 
 `models/` is gitignored [ADR-17]. A frozen version directory is immutable: `freeze` refuses to write to an existing version directory.
+
+**Candidate reference artifacts (additional project requirement, M10).** After the production refit, `evaluate` refits each of the four tuned candidates once, with its tuned hyperparameters and on the same rows, and writes it to `models/candidates/<name>/` for learning, inspection and audit. These artifacts are created after selection and never influence it, are never scored on the holdout, and are never released or served: `freeze` reads only `models/staging/` and requires `artifact_role = "production"`. CV-fold, tuning-trial and ablation models are never persisted.
 
 ## 15.2 joblib Artifact
 
@@ -1032,6 +1036,9 @@ All fields are required and non-empty (AC-044):
 | | `schema_hash` | SHA-256 of the normalized `input_schema` |
 | | `scope_rule` | `{"column": "GrLivArea", "max_in_domain": 4000}` |
 | Reproducibility | `seed`, `reproducibility_tolerance` | 42; 1e-6 |
+| Role | `artifact_role` | `"production"` (the selected model; all rules above) or `"candidate"` (a reference artifact in `models/candidates/`; additional project requirement, M10) |
+
+For a **candidate** artifact, `holdout`, `baseline_reference`, `temporal_diagnostic`, `quality_gates` and `mlflow.final_holdout_evaluation` are `null`, because a candidate is never evaluated on the holdout; every other field describes that candidate (its `cv`, `hyperparameters`, `feature_sets` and `transformed_feature_names`), and `is_release` is always `false`.
 
 ## 15.4 Schema and Version Metadata
 

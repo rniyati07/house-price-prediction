@@ -15,8 +15,13 @@ from tests.conftest import SmokeProject
 os.environ.setdefault("MLFLOW_ALLOW_FILE_STORE", "true")
 from mlflow.tracking import MlflowClient
 
-RUN_KINDS = {"final_holdout_evaluation", "baseline_reference", "quality_gates",
-             "temporal_diagnostic"}  # fmt: skip
+RUN_KINDS = {
+    "final_holdout_evaluation",
+    "baseline_reference",
+    "quality_gates",
+    "temporal_diagnostic",
+    "production_refit",  # M10
+}  # fmt: skip
 
 
 def test_smoke_train_runs_every_stage(smoke_project: SmokeProject) -> None:
@@ -71,7 +76,10 @@ def test_smoke_writes_only_under_artifacts_smoke(smoke_project: SmokeProject) ->
     smoke = root / "artifacts/smoke"
     for path in ("selection/selection_record.json", "selection/diagnostic_review.yaml",
                  "selection/residual_vs_predicted.png", "evaluation/quality_gates.json",
-                 "evaluation/temporal_diagnostic.json", "ablation/E-30_ablation.csv"):  # fmt: skip
+                 "evaluation/temporal_diagnostic.json", "ablation/E-30_ablation.csv",
+                 "model/model.joblib", "model/metadata.json",
+                 *[f"candidates/{n}/{f}" for n in ("ridge", "lasso", "random_forest", "lightgbm")
+                   for f in ("model.joblib", "metadata.json")]):  # fmt: skip
         assert (smoke / path).is_file(), path
     review = yaml.safe_load((smoke / "selection/diagnostic_review.yaml").read_text())
     assert review["smoke"] is True and review["status"] == "final"
@@ -92,7 +100,7 @@ def test_smoke_run_records(smoke_project: SmokeProject) -> None:
     # the fixture's own two executions (train --smoke, evaluate --smoke); later tests may
     # append refused evaluations to the same shared project
     index = read_index(smoke_project.root / "results")[:2]
-    assert [line["milestone"] for line in index] == ["M9", "M9"]
+    assert [line["milestone"] for line in index] == ["M9", "M10"]  # train, evaluate (+refit)
     assert [line["status"] for line in index] == ["succeeded", "succeeded"]
     train = read_result(smoke_project.root / "results" / index[0]["result"])
     assert train["params"]["smoke"] is True

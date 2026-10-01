@@ -30,3 +30,12 @@ ignore_missing_imports = true
 [[tool.mypy.overrides]]
 module = "house_price.*"
 disallow_untyped_defs = true
+
+[tool.coverage.run]
+source = ["house_price"]  # the package only (DOC-05 M10: coverage threshold)
+omit = ["*/__main__.py"]
+
+[tool.coverage.report]
+fail_under = 80
+show_missing = true
+skip_covered = true

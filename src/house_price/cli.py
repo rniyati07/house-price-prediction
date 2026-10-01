@@ -3,7 +3,8 @@
 Subcommands are added milestone by milestone. M6 adds ``train`` (extended by M7 with the
 ablation, the RC-02 check, and the development checks, by M8 with tuning and the comparison,
 and by M9 with selection and diagnostics); M9 adds ``evaluate`` (up to the temporal
-diagnostic) and ``--smoke`` (DN-17); ``freeze`` (M10) and ``predict`` (M11) follow.
+diagnostic) and ``--smoke`` (DN-17); M10 adds the production refit to ``evaluate`` and
+``freeze``; ``predict`` (M11) follows.
 """
 
 from __future__ import annotations
@@ -61,6 +62,23 @@ def _evaluate(args: argparse.Namespace) -> int:
     return 0
 
 
+def _freeze(args: argparse.Namespace) -> int:
+    from house_price.persistence.artifact import FreezeError, freeze
+    from house_price.tracking import TrackingError, default_tracking_uri
+
+    root = (args.root or Path.cwd()).resolve()
+    try:
+        result = freeze(args.version, root, args.config_dir or root / "configs",
+                        args.tracking_uri or default_tracking_uri(root))  # fmt: skip
+    except (ConfigError, DataError, TrackingError, FreezeError) as exc:
+        print(f"ERROR: {exc}", file=sys.stderr)
+        return 1
+    print(f"frozen {result.version} -> {result.directory} (model_sha256 {result.model_sha256}; "
+          f"hpp-release run {result.release_run_id})")  # fmt: skip
+    print(f"Tag the release commit explicitly: git tag v{result.version}")
+    return 0
+
+
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(prog="house-price", description="House Price Prediction")
     commands = parser.add_subparsers(dest="command")
@@ -83,6 +101,12 @@ def build_parser() -> argparse.ArgumentParser:
     evaluate.add_argument("--smoke", action="store_true",
                           help="DN-17: the holdout substitute; never the real holdout")  # fmt: skip
     evaluate.set_defaults(handler=_evaluate)
+    freeze = commands.add_parser("freeze", help="release the staging artifact as x.y.z (M10)")
+    freeze.add_argument("--version", required=True, help="semantic version x.y.z")
+    freeze.add_argument("--config-dir", type=Path, default=None, help="default: <root>/configs")
+    freeze.add_argument("--root", type=Path, default=None, help="project root (default: cwd)")
+    freeze.add_argument("--tracking-uri", default=None, help="default: file store <root>/mlruns")
+    freeze.set_defaults(handler=_freeze)
     return parser
 
 

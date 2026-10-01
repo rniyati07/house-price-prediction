@@ -2,7 +2,7 @@
 # override it, e.g. `make test PYTHON=.venv/Scripts/python`.
 PYTHON ?= python
 
-.PHONY: setup lint format typecheck test validate-data split train evaluate smoke repro-check
+.PHONY: setup lint format typecheck test validate-data split train evaluate smoke repro-check freeze
 
 setup:
 	$(PYTHON) -m pip install -r requirements.txt
@@ -18,8 +18,9 @@ format:
 typecheck:
 	$(PYTHON) -m mypy src
 
+# DOC-05 M10: coverage of the house_price package must stay >= 80% (pyproject.toml).
 test:
-	$(PYTHON) -m pytest
+	$(PYTHON) -m pytest --cov=house_price --cov-report=term-missing:skip-covered --cov-fail-under=80
 
 # Hash check and ingestion schema, plus the validation report (M2).
 validate-data:
@@ -51,3 +52,8 @@ smoke:
 CONFIG_DIR ?= configs
 repro-check:
 	$(PYTHON) -m house_price.repro --config-dir $(CONFIG_DIR)
+
+# house-price freeze: release models/staging as models/$(VERSION) after every gate QG-10 to
+# QG-16 passes (DOC-03 §16.2). M13 Release Run only.
+freeze:
+	$(PYTHON) -m house_price.cli freeze --version $(VERSION)

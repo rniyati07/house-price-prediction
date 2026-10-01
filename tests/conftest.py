@@ -254,3 +254,32 @@ def smoke_project(tmp_path_factory: pytest.TempPathFactory) -> SmokeProject:
     train = run_train(config_dir, root, smoke=True)
     evaluation = run_evaluate(config_dir, root, smoke=True)
     return SmokeProject(root, train, evaluation)
+
+
+def artifact_metadata(**overrides: object) -> object:
+    """A complete, valid staging ``ArtifactMetadata`` (DOC-03 §15.3) for tests."""
+    from house_price.persistence import artifact, metadata
+
+    schema = load_project_config(CONFIG_DIR, REPO_ROOT).schema
+    columns = metadata.input_schema(schema)
+    values: dict[str, object] = {
+        "model_version": metadata.UNRELEASED, "is_release": False, "model_sha256": "a" * 64,
+        "created_at": "2026-10-01T00:00:00+00:00", "git_commit": "b" * 40, "git_dirty": False,
+        "data_sha256": "c" * 64, "split_manifest_sha256": "d" * 64, "config_hash": "e" * 64,
+        "pipeline_run_id": "run-1", "selection_record_id": "rec-1",
+        "mlflow": metadata.MlflowLinks(refit="r1", final_holdout_evaluation="f1", release=None),
+        "python_version": "3.14.0", "library_versions": artifact.library_versions(),
+        "selected_candidate": "ridge", "hyperparameters": {"tuned_params": {"alpha": 1.0}},
+        "feature_sets": {"ridge": ["TotalSF"]}, "transformed_feature_names": {"ridge": ["x"]},
+        "target_transform": {"func": "log1p", "inverse_func": "expm1"}, "training_rows": 2925,
+        "cv": {"mean": 0.11, "se": 0.002, "n_folds": 15.0},
+        "holdout": {"log_rmse": 0.11, "mae": 1.0, "mape": 8.0, "r2": 0.9},
+        "baseline_reference": {"dummy_median": 0.4, "linear_2feat": 0.19},
+        "temporal_diagnostic": {"metrics": {"log_rmse": 0.12}, "label": "not used for selection"},
+        "quality_gates": [{"rule": "holdout_log_rmse", "passed": True}],
+        "input_schema": columns, "schema_hash": metadata.schema_hash(columns),
+        "scope_rule": metadata.ScopeRule(column="GrLivArea", max_in_domain=4000.0),
+        "seed": 42, "reproducibility_tolerance": 1e-6,
+    }  # fmt: skip
+    values.update(overrides)
+    return metadata.ArtifactMetadata(**values)  # type: ignore[arg-type]

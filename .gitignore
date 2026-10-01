@@ -17,7 +17,8 @@ data/interim/
 data/processed/*.csv
 
 artifacts/
-models/*.joblib
+# DOC-03 §15.1: models/ (staging and frozen artifacts) is gitignored.
+/models/
 
 mlruns/
 
